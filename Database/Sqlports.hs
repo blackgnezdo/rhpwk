@@ -18,6 +18,7 @@ module Database.Sqlports (
 	close,
 	hspkgs,
 	allpkgs,
+	bydistname,
 	open
 ) where
 
@@ -28,6 +29,7 @@ import Data.Maybe
 import Database.HDBC
 import Database.HDBC.Sqlite3
 import System.IO
+import Text.Regex
 
 data Pkg = Pkg {
 	fullpkgpath :: String,
@@ -120,3 +122,11 @@ pkgClosure ps = Map.map zapNonHsDeps ps
 		zapNonHsDeps p = p {deps = filter isHsDep $ deps p}
 		isHsDep :: Dependency -> Bool
 		isHsDep d = dependspath d `Map.member` ps
+
+
+-- Build a map from a list of packages where the keys are distnames (but
+-- without the version number).
+bydistname :: [Pkg] -> Map String Pkg
+bydistname pkgs = Map.fromList [ (zapVers (fromMaybe "" dn), p) | p <- pkgs, let dn = distname p, isJust dn]
+	where
+		zapVers s = subRegex (mkRegex "-[0-9.]*$") s ""

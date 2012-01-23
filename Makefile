@@ -14,6 +14,7 @@ HCFLAGS=	-O2 \
 		-package HDBC-sqlite3 \
 		-package directory \
 		-package filepath \
+		-package regex-compat \
 		-main-is RHPWK
 
 PROG=	rhpwk
