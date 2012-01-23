@@ -26,9 +26,9 @@ data Flag = All | Dump | Pkgs deriving (Eq, Show)
 
 options :: [OptDescr Flag]
 options =
-	[ Option ['a']		[]	(NoArg All)	"for -d, dump all package data"
-	, Option ['d']		[]	(NoArg Dump)	"dump package data"
-	, Option ['p']		[]	(NoArg Pkgs)	"dump installed package data"
+	[ Option ['a']	[]	(NoArg All)		"for -d, dump all package data"
+	, Option ['d']	[]	(NoArg Dump)		"dump package data"
+	, Option ['p']	[]	(NoArg Pkgs)		"dump installed package data"
 	]
 
 usage = usageInfo "Usage: rhpwk [-d [-a]]" options
