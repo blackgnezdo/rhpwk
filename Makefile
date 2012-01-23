@@ -6,10 +6,11 @@ HC=		ghc
 HCFLAGS=	-O2 \
 		-cpp -DSQLPORTSPATH=\"${SQLPORTSPATH}\" \
 		-package HDBC \
-		-package HDBC-sqlite3
+		-package HDBC-sqlite3 \
+		-main-is RHPWK
 
 PROG=	rhpwk
-SRCS=	Main.hs Database/Sqlports.hs
+SRCS=	RHPWK.hs Database/Sqlports.hs
 
 CLEANFILES+=	${OBJS:R:S/$/.hi/}
 

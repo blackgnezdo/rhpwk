@@ -12,7 +12,7 @@
 -- ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 -- OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-module Main(main) where
+module RHPWK (main) where
 
 import Database.Sqlports
 import Data.Map (elems)
