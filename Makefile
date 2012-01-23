@@ -8,7 +8,7 @@ HCFLAGS=	-O2 \
 		-package HDBC \
 		-package HDBC-sqlite3
 
-PROG=	hs-openbsd-tool
+PROG=	rhpwk
 SRCS=	Main.hs Database/Sqlports.hs
 
 CLEANFILES+=	${OBJS:R:S/$/.hi/}
