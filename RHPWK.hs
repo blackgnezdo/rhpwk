@@ -16,9 +16,10 @@ module RHPWK (main) where
 
 import Database.Sqlports
 import Database.GhcPkg
-import Data.Map (elems)
+import Data.Map hiding (map)
 import Distribution.InstalledPackageInfo
 import Distribution.Package
+import Prelude hiding (lookup)
 import System.Console.GetOpt
 import System.Environment
 
@@ -31,7 +32,7 @@ options =
 	, Option ['p']	[]	(NoArg Pkgs)		"dump installed package data"
 	]
 
-usage = usageInfo "Usage: rhpwk [-d [-a]]" options
+usage = usageInfo "Usage: rhpwk [-d [-a]] | [ -p ] | pname ..." options
 
 parseOpts :: [String] -> IO ([Flag], [String])
 parseOpts argv =
@@ -43,13 +44,11 @@ parseOpts argv =
 main = do
 	argv <- getArgs
 	(flags, args) <- parseOpts argv
-	case args of
-		(_:_) ->	ioError (userError usage)
-		_     ->	return ()
-	case (Dump `elem` flags, All `elem` flags, Pkgs `elem` flags) of
-		(True, False, False) ->	dumpWith hspkgs
-		(True, True, False)  ->	dumpWith allpkgs
-		(False, False, True) ->	dumpPkgs
+	case (args, Dump `elem` flags, All `elem` flags, Pkgs `elem` flags) of
+		([], True, False, False)	->	dumpWith hspkgs
+		([], True, True, False)		->	dumpWith allpkgs
+		([], False, False, True)	->	dumpPkgs
+		(fs@(_:_), False, False, False) ->	mapM_ findPkg fs
 		_	      ->	ioError (userError usage)
 
 dumpWith f = do
@@ -64,3 +63,16 @@ dumpPkgs = do
 	let unPkgName (PackageName n) = n
 	let ghcpkgs = [ unPkgName $ pkgName $ sourcePackageId p | p <- elems ipkgs, ipkgpath p == "lang/ghc" ]
 	print ghcpkgs
+
+findPkg p = do
+	c <- open
+	pkgs <- hspkgs c
+	close c
+	let pkgs' = bydistname $ elems pkgs
+	case lookup p pkgs' of
+		Just pkg ->	print pkg
+		Nothing  ->	return ()
+	ipkgs <- installedpkgs
+	case lookup p ipkgs of
+		Just pkg ->	print pkg
+		Nothing  ->	return ()
