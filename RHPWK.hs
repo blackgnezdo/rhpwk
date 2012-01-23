@@ -16,15 +16,10 @@ module RHPWK (main) where
 
 import Database.Sqlports
 import Database.GhcPkg
-import Data.List
 import Data.Map (elems)
-import Data.Maybe (fromMaybe)
 import Distribution.InstalledPackageInfo
 import Distribution.Package
-import Distribution.Simple.Utils
 import System.Console.GetOpt
-import System.Directory
-import System.FilePath
 import System.Environment
 
 data Flag = All | Dump | Pkgs deriving (Eq, Show)
