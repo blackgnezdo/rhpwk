@@ -1,4 +1,4 @@
--- Copyright (c) 2010 Matthias Kilian <kili@outback.escape.de>
+-- Copyright (c) 2010, 2012 Matthias Kilian <kili@outback.escape.de>
 --
 -- Permission to use, copy, modify, and distribute this software for any
 -- purpose with or without fee is hereby granted, provided that the above
@@ -23,6 +23,7 @@ module Database.Sqlports (
 	open
 ) where
 
+import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe
@@ -63,55 +64,47 @@ open = connectSqlite3 SQLPORTSPATH
 close :: Connection -> IO ()
 close = disconnect
 
-hspkgdeps :: Connection -> Pkg -> IO Pkg
-hspkgdeps c p = do
-		stmt <- prepare c "SELECT dependspath, pkgspec, type \\
-				  \FROM depends \\
-				  \WHERE fullpkgpath = ?"
-		execute stmt [toSql $ fullpkgpath p]
-		rows <- fetchAllRows' stmt
-		let ds = map (toDep . \[d, s, t] -> (fromSql d, fromSql s, fromSql t)) rows
-		return p {deps = ds}
-	where
-		toDep (d, s, t) = Dependency d s (dependsType t)
+allpkgs :: Connection -> IO (Map String Pkg)
+allpkgs = getpkgs ""
 
 hspkgs :: Connection -> IO (Map String Pkg)
 hspkgs c = do
-		stmt <- prepare c "SELECT DISTINCT pa.fullpkgpath, pkgpath, distname \\
-				  \FROM depends d \\
-				  \JOIN paths pa ON d.fullpkgpath = pa.fullpkgpath \\
-				  \JOIN ports po ON pa.fullpkgpath = po.fullpkgpath \\
-				  \WHERE dependspath ='lang/ghc' \\
-				  \AND TYPE in ('B', 'L', 'R')"
-		execute stmt []
-		rows <- fetchAllRows' stmt
-		let pkg0s = map (toPkg . \[f, p, d] -> (fromSql f, fromSql p, fromSql d)) rows
-		pkg1s <- mapM (hspkgdeps c) pkg0s
-		let pmap = Map.fromList $ [(fullpkgpath p, p) | p <- pkg1s]
+		pmap <- getpkgs "JOIN depends d2 USING (fullpkgpath) \\
+				\WHERE d2.dependspath = 'lang/ghc'"
+				c
 		return $ pkgClosure pmap
 
--- Just for testing wether it also works in the generic (Non-haskell) case:
-allpkgs :: Connection -> IO (Map String Pkg)
-allpkgs c = do
-		stmt <- prepare c "SELECT DISTINCT fullpkgpath, pkgpath, distname \\
-				  \FROM paths JOIN ports USING (fullpkgpath)"
+getpkgs :: String -> Connection -> IO (Map String Pkg)
+getpkgs constr c = do
+		stmt <- prepare c $
+			  "SELECT DISTINCT \\
+			  \fullpkgpath, pkgpath, distname, \\
+			  \d.dependspath, d.pkgspec, d.type \\
+			  \FROM paths \\
+			  \JOIN ports USING (fullpkgpath) \\
+			  \LEFT JOIN depends d USING (fullpkgpath) "
+			  ++ constr ++
+			  " ORDER BY fullpkgpath, d.dependspath, d.type"
 		execute stmt []
 		rows <- fetchAllRows' stmt
-		hPutStrLn stderr "Reading paths..."
-		let pkg0s = map (toPkg . \[f, p, d] -> (fromSql f, fromSql p, fromSql d)) rows
-		hPutStrLn stderr "Reading deps..."
-                -- XXX very inefficient, because it executes several
-                -- thousands queries on the database. Better combine
-                -- dependency fetching with the package fetching
-                -- above ordered by fullpkgpath and assemble the
-                -- packages's dependencies on the fly.
-		pkg1s <- mapM (hspkgdeps c) pkg0s
-		hPutStrLn stderr "Creating map..."
-		let pmap = Map.fromList $ [(fullpkgpath p, p) | p <- pkg1s]
-		hPutStrLn stderr "Done."
+		let rowss = groupBy (\rs rs' -> take 3 rs == take 3 rs') rows
+		let pkgs = map toPkg rowss
+		let pmap = Map.fromList $ [(fullpkgpath p, p) | p <- pkgs]
 		return pmap
+	where
 
-toPkg (f, p, d) = Pkg f p d undefined
+		toPkg rs@([f, p, d, _, _, _] : _) =
+			let f' = fromSql f
+			    p' = fromSql p
+			    d' = fromSql d
+			in
+			    collectdeps (Pkg f' p' d' undefined) (map (drop 3) rs)
+
+		collectdeps p rs =
+			let rs' = filter (all (/= SqlNull)) rs
+			    toDep (d, s, t) = Dependency d s (dependsType t)
+			    ds = map (toDep . \[d, s, t] -> (fromSql d, fromSql s, fromSql t)) rs'
+			in p {deps = ds}
 
 -- Given a map of fullpkgnames to Pkgs, remove all dependencies
 -- contained in Pkgs for which no entry exists in the map.
