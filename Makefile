@@ -1,4 +1,11 @@
-# $Id$
+# To build this, you have to
+#	pkg_add ghc hs-HDBC hs-HDBC-sqlite3 hs-regex-compat
+#
+# Then
+#	make depend && make
+#
+# To use it (well, it's not yet very useful at all),
+#	pkg_add sqlports
 
 PREFIX=		/usr/local
 LOCALBASE=	${PREFIX}
