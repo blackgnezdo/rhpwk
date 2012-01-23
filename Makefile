@@ -1,12 +1,17 @@
 # $Id$
 
 SQLPORTSPATH=	/usr/local/share/sqlports
+GHCPKGDB=	/usr/local/lib/ghc/package.conf.d
 
 HC=		ghc
 HCFLAGS=	-O2 \
 		-cpp -DSQLPORTSPATH=\"${SQLPORTSPATH}\" \
+		     -DGHCPKGDB=\"${GHCPKGDB}\" \
+		-package Cabal \
 		-package HDBC \
 		-package HDBC-sqlite3 \
+		-package directory \
+		-package filepath \
 		-main-is RHPWK
 
 PROG=	rhpwk

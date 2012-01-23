@@ -15,17 +15,24 @@
 module RHPWK (main) where
 
 import Database.Sqlports
+import Data.List
 import Data.Map (elems)
 import Data.Maybe (fromMaybe)
+import Distribution.InstalledPackageInfo
+import Distribution.Package
+import Distribution.Simple.Utils
 import System.Console.GetOpt
+import System.Directory
+import System.FilePath
 import System.Environment
 
-data Flag = All | Dump deriving (Eq, Show)
+data Flag = All | Dump | Pkgs deriving (Eq, Show)
 
 options :: [OptDescr Flag]
 options =
 	[ Option ['a']		[]	(NoArg All)	"for -d, dump all package data"
 	, Option ['d']		[]	(NoArg Dump)	"dump package data"
+	, Option ['p']		[]	(NoArg Pkgs)	"dump installed package data"
 	]
 
 usage = usageInfo "Usage: rhpwk [-d [-a]]" options
@@ -43,9 +50,10 @@ main = do
 	case args of
 		(_:_) ->	ioError (userError usage)
 		_     ->	return ()
-	case (Dump `elem` flags, All `elem` flags) of
-		(True, False) ->	dumpWith hspkgs
-		(True, True)  ->	dumpWith allpkgs
+	case (Dump `elem` flags, All `elem` flags, Pkgs `elem` flags) of
+		(True, False, False) ->	dumpWith hspkgs
+		(True, True, False)  ->	dumpWith allpkgs
+		(False, False, True) ->	dumpPkgs GHCPKGDB
 		_	      ->	ioError (userError usage)
 
 dumpWith f = do
@@ -53,3 +61,19 @@ dumpWith f = do
 	ps <- f c
 	close c
 	putStr $ unlines $ map show $ elems ps
+
+dumpPkgs path = do
+	fs <- getDirectoryContents path
+	let confs = filter (".conf" `isSuffixOf`) fs
+	pkgs <- mapM parsePkgInfo $ map (path </>) confs
+	let ipkgpath = Distribution.InstalledPackageInfo.pkgpath
+	let unPkgName (PackageName n) = n
+	let ghcpkgs = [ unPkgName $ pkgName $ sourcePackageId p | p <- pkgs, ipkgpath p == "lang/ghc" ]
+	print ghcpkgs
+
+
+parsePkgInfo :: FilePath -> IO InstalledPackageInfo
+parsePkgInfo f = do
+	c <- readUTF8File f
+	case parseInstalledPackageInfo c of
+		ParseOk _ ps  ->	return ps
