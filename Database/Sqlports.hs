@@ -87,7 +87,7 @@ getpkgs constr c = do
 		rows <- fetchAllRows' stmt
 		let rowss = groupBy (\rs rs' -> take 3 rs == take 3 rs') rows
 		let pkgs = map toPkg rowss
-		let pmap = Map.fromList $ [(fullpkgpath p, p) | p <- pkgs]
+		let pmap = Map.fromList [(fullpkgpath p, p) | p <- pkgs]
 		return pmap
 	where
 
