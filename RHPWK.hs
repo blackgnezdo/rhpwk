@@ -15,6 +15,7 @@
 module RHPWK (main) where
 
 import Database.Sqlports
+import Database.GhcPkg
 import Data.List
 import Data.Map (elems)
 import Data.Maybe (fromMaybe)
@@ -53,7 +54,7 @@ main = do
 	case (Dump `elem` flags, All `elem` flags, Pkgs `elem` flags) of
 		(True, False, False) ->	dumpWith hspkgs
 		(True, True, False)  ->	dumpWith allpkgs
-		(False, False, True) ->	dumpPkgs GHCPKGDB
+		(False, False, True) ->	dumpPkgs
 		_	      ->	ioError (userError usage)
 
 dumpWith f = do
@@ -62,18 +63,9 @@ dumpWith f = do
 	close c
 	putStr $ unlines $ map show $ elems ps
 
-dumpPkgs path = do
-	fs <- getDirectoryContents path
-	let confs = filter (".conf" `isSuffixOf`) fs
-	pkgs <- mapM parsePkgInfo $ map (path </>) confs
+dumpPkgs = do
+	ipkgs <- installedpkgs
 	let ipkgpath = Distribution.InstalledPackageInfo.pkgpath
 	let unPkgName (PackageName n) = n
-	let ghcpkgs = [ unPkgName $ pkgName $ sourcePackageId p | p <- pkgs, ipkgpath p == "lang/ghc" ]
+	let ghcpkgs = [ unPkgName $ pkgName $ sourcePackageId p | p <- elems ipkgs, ipkgpath p == "lang/ghc" ]
 	print ghcpkgs
-
-
-parsePkgInfo :: FilePath -> IO InstalledPackageInfo
-parsePkgInfo f = do
-	c <- readUTF8File f
-	case parseInstalledPackageInfo c of
-		ParseOk _ ps  ->	return ps
