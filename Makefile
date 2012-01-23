@@ -1,7 +1,9 @@
 # $Id$
 
-SQLPORTSPATH=	/usr/local/share/sqlports
-GHCPKGDB=	/usr/local/lib/ghc/package.conf.d
+PREFIX=		/usr/local
+LOCALBASE=	${PREFIX}
+SQLPORTSPATH=	${LOCALBASE}/share/sqlports
+GHCPKGDB=	${LOCALBASE}/lib/ghc/package.conf.d
 
 HC=		ghc
 HCFLAGS=	-O2 \
