@@ -25,6 +25,8 @@ import Distribution.Simple.Utils
 import System.Directory
 import System.FilePath
 
+-- Fetch all InstalledPackagesInfos known to ghc (or ghc-pkg),
+-- mapped by the PackageName.
 installedpkgs :: IO (Map String InstalledPackageInfo)
 installedpkgs = do
 	let path = GHCPKGDB

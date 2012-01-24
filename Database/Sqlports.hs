@@ -64,9 +64,13 @@ open = connectSqlite3 SQLPORTSPATH
 close :: Connection -> IO ()
 close = disconnect
 
+-- Fetch all Pkgs from sqlports, mapped by fullpkgpath.
 allpkgs :: Connection -> IO (Map String Pkg)
 allpkgs = getpkgs ""
 
+-- Fetch all Pkgs depending on lang/ghc from sqlports, mapped by
+-- fullpkgpath, with dependencies limited to Pkgs also depending
+-- on lang/ghc (i.e.  you won't get dependencies like iconv or gmp).
 hspkgs :: Connection -> IO (Map String Pkg)
 hspkgs c = do
 		pmap <- getpkgs "JOIN depends d2 USING (fullpkgpath) \\
