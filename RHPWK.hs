@@ -27,12 +27,12 @@ data Flag = All | Dump | Pkgs deriving (Eq, Show)
 
 options :: [OptDescr Flag]
 options =
-	[ Option ['a']	[]	(NoArg All)		"for -d, dump all package data"
+	[ Option ['a']	[]	(NoArg All)		"for -d and -p, dump all data"
 	, Option ['d']	[]	(NoArg Dump)		"dump package data"
 	, Option ['p']	[]	(NoArg Pkgs)		"dump installed package data"
 	]
 
-usage = usageInfo "Usage: rhpwk [-d [-a]] | [ -p ] | pname ..." options
+usage = usageInfo "Usage: rhpwk [-d [-a]] | [ -p [-a]] | pname ..." options
 
 parseOpts :: [String] -> IO ([Flag], [String])
 parseOpts argv =
@@ -47,9 +47,13 @@ main = do
 	case (args, Dump `elem` flags, All `elem` flags, Pkgs `elem` flags) of
 		([], True, False, False)	->	dumpWith hspkgs
 		([], True, True, False)		->	dumpWith allpkgs
-		([], False, False, True)	->	dumpPkgs
+		([], False, all, True)		->	dumpPkgs all
 		(fs@(_:_), False, False, False) ->	mapM_ findPkg fs
 		_	      ->	ioError (userError usage)
+
+unPkgName (PackageName n) = n
+ppkgpath = Database.Sqlports.pkgpath
+ipkgpath = Distribution.InstalledPackageInfo.pkgpath
 
 dumpWith f = do
 	c <- open
@@ -57,12 +61,10 @@ dumpWith f = do
 	close c
 	putStr $ unlines $ map show $ elems ps
 
-dumpPkgs = do
+dumpPkgs all = do
 	ipkgs <- installedpkgs
-	let ipkgpath = Distribution.InstalledPackageInfo.pkgpath
-	let unPkgName (PackageName n) = n
-	let ghcpkgs = [ unPkgName $ pkgName $ sourcePackageId p | p <- elems ipkgs, ipkgpath p == "lang/ghc" ]
-	print ghcpkgs
+	let ghcpkgs = [ p | p <- elems ipkgs, all || ipkgpath p == "lang/ghc" ]
+	putStr $ unlines $ map show $ ghcpkgs
 
 findPkg p = do
 	c <- open
@@ -70,9 +72,11 @@ findPkg p = do
 	close c
 	let pkgs' = bydistname $ elems pkgs
 	case lookup p pkgs' of
-		Just pkg ->	print pkg
+		Just pkg ->	putStrLn $
+				"sqlports:\t" ++ ppkgpath pkg
 		Nothing  ->	return ()
 	ipkgs <- installedpkgs
 	case lookup p ipkgs of
-		Just pkg ->	print pkg
+		Just pkg ->	putStrLn $
+				"ghc-pkg:\t" ++ (ipkgpath pkg)
 		Nothing  ->	return ()
