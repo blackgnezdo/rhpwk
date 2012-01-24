@@ -124,7 +124,7 @@ pkgClosure ps = Map.map zapNonHsDeps ps
 		isHsDep d = dependspath d `Map.member` ps
 
 
--- Build a map from a list of packages where the keys are distnames (but
+-- Build a map from a list of Pkgs where the keys are distnames (but
 -- without the version number).
 bydistname :: [Pkg] -> Map String Pkg
 bydistname pkgs = Map.fromList [ (zapVers (fromMaybe "" dn), p) | p <- pkgs, let dn = distname p, isJust dn]
