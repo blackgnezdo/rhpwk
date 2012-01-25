@@ -75,7 +75,7 @@ findPkg ipkgs hpkgs p = do
 	let pkgs' = bydistname $ elems hpkgs
 	case lookup p pkgs' of
 		Just pkg ->	putStrLn $
-				"sqlports:\t" ++ ppkgpath pkg
+				"sqlports:\t" ++ fullpkgpath pkg
 		Nothing  ->	return ()
 	case lookup p ipkgs of
 		Just pkg ->	putStrLn $
