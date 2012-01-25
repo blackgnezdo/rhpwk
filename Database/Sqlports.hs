@@ -132,8 +132,9 @@ pkgClosure ps = Map.map zapNonHsDeps ps
 
 
 -- Build a map from a list of Pkgs where the keys are distnames (but
--- without the version number). For multipackages, try to take the
--- ",-lib" subpackage.
+-- without the version number). For multipackages, only take the
+-- ",-lib" subpackage (probably wrong, but currently, all hs-ports
+-- with multipackage actually have a -main and a -lib subpackage).
 bydistname :: [Pkg] -> Map String Pkg
 bydistname pkgs = Map.fromList [ (zapVers (fromMaybe "" dn), p)
 			       | p <- pkgs,
