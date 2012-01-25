@@ -136,7 +136,7 @@ pkgClosure ps = Map.map zapNonHsDeps ps
 -- ",-lib" subpackage (probably wrong, but currently, all hs-ports
 -- with multipackage actually have a -main and a -lib subpackage).
 bydistname :: [Pkg] -> Map String Pkg
-bydistname pkgs = Map.fromList [ (zapVers (fromMaybe "" dn), p)
+bydistname pkgs = Map.fromList [ (zapVers (fromMaybe undefined dn), p)
 			       | p <- pkgs,
 				 let dn = distname p,
 				 isJust dn,
