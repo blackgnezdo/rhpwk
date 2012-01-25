@@ -48,7 +48,12 @@ main = do
 		([], True, False, False)	->	dumpWith hspkgs
 		([], True, True, False)		->	dumpWith allpkgs
 		([], False, all, True)		->	dumpPkgs all
-		(fs@(_:_), False, False, False) ->	mapM_ findPkg fs
+		(fs@(_:_), False, False, False) ->	do
+								c <- open
+								hps <- hspkgs c
+								close c
+								ips <- installedpkgs
+								mapM_ (findPkg ips hps) fs
 		_	      ->	ioError (userError usage)
 
 unPkgName (PackageName n) = n
@@ -66,16 +71,12 @@ dumpPkgs all = do
 	let ghcpkgs = [ p | p <- elems ipkgs, all || ipkgpath p == "lang/ghc" ]
 	putStr $ unlines $ map show $ ghcpkgs
 
-findPkg p = do
-	c <- open
-	pkgs <- hspkgs c
-	close c
-	let pkgs' = bydistname $ elems pkgs
+findPkg ipkgs hpkgs p = do
+	let pkgs' = bydistname $ elems hpkgs
 	case lookup p pkgs' of
 		Just pkg ->	putStrLn $
 				"sqlports:\t" ++ ppkgpath pkg
 		Nothing  ->	return ()
-	ipkgs <- installedpkgs
 	case lookup p ipkgs of
 		Just pkg ->	putStrLn $
 				"ghc-pkg:\t" ++ (ipkgpath pkg)
