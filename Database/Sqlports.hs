@@ -35,6 +35,7 @@ data Pkg = Pkg {
 	fullpkgpath :: String,
 	pkgpath :: String,
 	distname :: Maybe String,
+	multi :: Bool,
 	deps :: [Dependency]
 } deriving (Show, Eq)
 
@@ -83,6 +84,7 @@ getpkgs constr c = do
 		stmt <- prepare c $
 			  "SELECT DISTINCT \\
 			  \fullpkgpath, pkgpath, distname, \\
+			  \multi_packages IS NOT NULL as multi, \\
 			  \d.dependspath, d.pkgspec, d.type \\
 			  \FROM paths \\
 			  \JOIN ports USING (fullpkgpath) \\
@@ -97,12 +99,13 @@ getpkgs constr c = do
 		return pmap
 	where
 
-		toPkg rs@([f, p, d, _, _, _] : _) =
+		toPkg rs@([f, p, d, m, _, _, _] : _) =
 			let f' = fromSql f
 			    p' = fromSql p
 			    d' = fromSql d
+			    m' = fromSql m
 			in
-			    collectdeps (Pkg f' p' d' undefined) (map (drop 3) rs)
+			    collectdeps (Pkg f' p' d' m' undefined) (map (drop 4) rs)
 
 		collectdeps p rs =
 			let rs' = filter (all (/= SqlNull)) rs
@@ -129,8 +132,15 @@ pkgClosure ps = Map.map zapNonHsDeps ps
 
 
 -- Build a map from a list of Pkgs where the keys are distnames (but
--- without the version number).
+-- without the version number). For multipackages, try to take the
+-- ",-lib" subpackage.
 bydistname :: [Pkg] -> Map String Pkg
-bydistname pkgs = Map.fromList [ (zapVers (fromMaybe "" dn), p) | p <- pkgs, let dn = distname p, isJust dn]
+bydistname pkgs = Map.fromList [ (zapVers (fromMaybe "" dn), p)
+			       | p <- pkgs,
+				 let dn = distname p,
+				 isJust dn,
+				 not (multi p) ||
+				 isJust (matchRegex (mkRegex ",-lib$") (fullpkgpath p))
+			       ]
 	where
 		zapVers s = subRegex (mkRegex "-[0-9.]*$") s ""
