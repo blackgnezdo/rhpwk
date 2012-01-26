@@ -14,8 +14,10 @@
 
 module RHPWK (main) where
 
+import Cabal.Cabal
 import Database.Sqlports
 import Database.GhcPkg
+import Data.List (isSuffixOf)
 import Data.Map hiding (map)
 import Distribution.InstalledPackageInfo
 import Distribution.Package
@@ -77,7 +79,10 @@ processFile ::    Map String InstalledPackageInfo
 	       -> Map String Pkg
 	       -> String
 	       -> IO ()
-processFile = findPkg
+processFile ipkgs hpkgs f =
+	if ".cabal" `isSuffixOf` f
+	then foo f
+	else findPkg ipkgs hpkgs f
 
 findPkg ::    Map String InstalledPackageInfo
 	   -> Map String Pkg

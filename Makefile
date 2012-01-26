@@ -25,7 +25,7 @@ HCFLAGS=	-O2 \
 		-main-is RHPWK
 
 PROG=	rhpwk
-SRCS=	RHPWK.hs Database/Sqlports.hs Database/GhcPkg.hs
+SRCS=	RHPWK.hs Cabal/Cabal.hs Database/Sqlports.hs Database/GhcPkg.hs
 
 CLEANFILES+=	${OBJS:R:S/$/.hi/}
 
