@@ -13,6 +13,7 @@
 -- OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 module Database.Sqlports (
+	Connection,
 	Dependency (..),
 	Pkg (..),
 	close,

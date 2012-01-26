@@ -60,17 +60,29 @@ unPkgName (PackageName n) = n
 ppkgpath = Database.Sqlports.pkgpath
 ipkgpath = Distribution.InstalledPackageInfo.pkgpath
 
+dumpWith :: (Connection -> IO (Map String Pkg)) -> IO ()
 dumpWith f = do
 	c <- open
 	ps <- f c
 	close c
 	putStr $ unlines $ map show $ elems ps
 
+dumpPkgs :: Bool -> IO ()
 dumpPkgs all = do
 	ipkgs <- installedpkgs
 	let ghcpkgs = [ p | p <- elems ipkgs, all || ipkgpath p == "lang/ghc" ]
 	putStr $ unlines $ map show $ ghcpkgs
 
+processFile ::    Map String InstalledPackageInfo
+	       -> Map String Pkg
+	       -> String
+	       -> IO ()
+processFile = findPkg
+
+findPkg ::    Map String InstalledPackageInfo
+	   -> Map String Pkg
+	   -> String
+	   -> IO ()
 findPkg ipkgs hpkgs p = do
 	let pkgs' = bydistname $ elems hpkgs
 	case lookup p pkgs' of
