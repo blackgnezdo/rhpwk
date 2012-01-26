@@ -53,7 +53,7 @@ main = do
 								hps <- hspkgs c
 								close c
 								ips <- installedpkgs
-								mapM_ (findPkg ips hps) fs
+								mapM_ (processFile ips hps) fs
 		_	      ->	ioError (userError usage)
 
 unPkgName (PackageName n) = n
