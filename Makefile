@@ -36,9 +36,11 @@ ${PROG}: ${OBJS}
 
 .hs.hi:
 	${HC} ${HCFLAGS} -c ${.IMPSRC} -ohi ${.TARGET:R}.hi -o ${.TARGET:R}.o
+	touch ${.TARGET:R}.hi
 
 .hs.o:
 	${HC} ${HCFLAGS} -c ${.IMPSRC} -ohi ${.TARGET:R}.hi -o ${.TARGET:R}.o
+	touch ${.TARGET:R}.hi
 
 .PHONY: depend
 depend: ${SRCS}
