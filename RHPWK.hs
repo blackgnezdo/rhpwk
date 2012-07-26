@@ -30,7 +30,7 @@ data Flag = All | Dump | Pkgs deriving (Eq, Show)
 options :: [OptDescr Flag]
 options =
 	[ Option ['a']	[]	(NoArg All)		"for -d and -p, dump all data"
-	, Option ['d']	[]	(NoArg Dump)		"dump package data"
+	, Option ['d']	[]	(NoArg Dump)		"dump sqlports data"
 	, Option ['p']	[]	(NoArg Pkgs)		"dump installed package data"
 	]
 
