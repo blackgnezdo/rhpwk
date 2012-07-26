@@ -75,23 +75,56 @@ allpkgs = getpkgs ""
 -- on lang/ghc (i.e.  you won't get dependencies like iconv or gmp).
 hspkgs :: Connection -> IO (Map String Pkg)
 hspkgs c = do
+		-- For sqlports (not -compact), this was:
+		-- JOIN depends d2 USING (fullpkgpath)
+		-- WHERE d2.dependspath = 'lang/ghc'
 		pmap <- getpkgs "JOIN depends d2 USING (fullpkgpath) \\
-				\WHERE d2.dependspath = 'lang/ghc'"
+				\JOIN paths pa4 ON d2.dependspath = pa4.id \\
+				\WHERE pa4.fullpkgpath = 'lang/ghc'"
 				c
 		return $ pkgClosure pmap
 
 getpkgs :: String -> Connection -> IO (Map String Pkg)
 getpkgs constr c = do
+		-- For sqlports (not -compact), this was:
+		-- SELECT DISTINCT
+		--   ports.fullpkgpath,
+		--   paths.pkgpath,
+		--   ports.distname,
+		--   ports.multi_packages IS NOT NULL as multi,
+		--   d.dependspath,
+		--   d.pkgspec,
+		--   d.type
+		-- FROM ports
+		-- JOIN paths USING (fullpkgpath)
+		-- LEFT JOIN depends d USING (fullpkgpath)
+		-- <++ constr ++>
+		-- ORDER BY fullpkgpath, d.dependspath, d.type;
 		stmt <- prepare c $
-			  "SELECT DISTINCT \\
-			  \fullpkgpath, pkgpath, distname, \\
-			  \multi_packages IS NOT NULL as multi, \\
-			  \d.dependspath, d.pkgspec, d.type \\
-			  \FROM paths \\
-			  \JOIN ports USING (fullpkgpath) \\
-			  \LEFT JOIN depends d USING (fullpkgpath) "
-			  ++ constr ++
-			  " ORDER BY fullpkgpath, d.dependspath, d.type"
+			"SELECT DISTINCT \\
+			\  pa1.fullpkgpath, \\
+			\  pa2.fullpkgpath as pkgpath, \\
+			\  ports.distname, \\
+			\  multi.fullpkgpath IS NOT NULL as multi, \\
+			\  pa3.fullpkgpath as dependspath, \\
+			\  d.pkgspec, \\
+			\  CASE d.type \\
+			\    WHEN 0 THEN 'L' \\
+			\    WHEN 1 THEN 'R' \\
+			\    WHEN 2 THEN 'B' \\
+			\    WHEN 3 THEN 'Regress' \\
+			\  END as type \\
+			\FROM ports \\
+			\JOIN paths pa1 ON ports.fullpkgpath = pa1.id \\
+			\JOIN paths pa2 ON pa1.pkgpath = pa2.id \\
+			\LEFT JOIN multi ON ports.fullpkgpath = multi.fullpkgpath \\
+			\LEFT JOIN depends d USING (fullpkgpath) \\
+			\LEFT JOIN paths pa3 ON d.dependspath = pa3.id"
+			++ " " ++ constr ++ " " ++
+			"ORDER BY \\
+			\  pa1.fullpkgpath, \\
+			\  pa3.fullpkgpath, \\
+			\  type"
 		execute stmt []
 		rows <- fetchAllRows' stmt
 		let rowss = groupBy (\rs rs' -> take 3 rs == take 3 rs') rows

@@ -9,7 +9,7 @@
 
 PREFIX=		/usr/local
 LOCALBASE=	${PREFIX}
-SQLPORTSPATH=	${LOCALBASE}/share/sqlports
+SQLPORTSPATH=	${LOCALBASE}/share/sqlports-compact
 GHCPKGDB=	${LOCALBASE}/lib/ghc/package.conf.d
 
 HC=		ghc
