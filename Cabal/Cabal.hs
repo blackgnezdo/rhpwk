@@ -37,7 +37,7 @@ foo f = do
 	    -- XXX use the actual compiler version instead of
 	    -- hardcoding it here. And why isn't there a buildCompilerId
 	    -- constant available?
-	    compiler = CompilerId buildCompilerFlavor $ Version [7, 0] []
+	    compiler = CompilerId buildCompilerFlavor $ Version [7, 4] []
 	    extraDeps = []
 	    (Right (p, flags')) = finalizePackageDescription flags checkDep plat compiler extraDeps gp
 	    lib = library p
