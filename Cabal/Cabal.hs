@@ -16,6 +16,7 @@ module Cabal.Cabal (
 	foo
 ) where
 
+import Control.Monad
 import Data.Maybe
 import Distribution.Compiler
 import Distribution.Package
@@ -46,6 +47,9 @@ foo f = do
 	    hasExecs = not $ null $ execs
 	    libDeps = targetBuildDepends $ libBuildInfo $ fromJust lib
 	    execDeps = concatMap (targetBuildDepends . buildInfo) execs
+	    buildDeps = concatMap buildTools $ allBuildInfo p
+	unless (null buildDeps) $
+		printDeps "BUILD_DEPENDS" buildDeps
 	if (hasLib && hasExecs) then do
 		printDeps "RUN_DEPENDS-lib" libDeps
 		printDeps "RUN_DEPENDS-main"  execDeps
