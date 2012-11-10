@@ -20,7 +20,8 @@ module Database.Sqlports (
 	hspkgs,
 	allpkgs,
 	bydistname,
-	open
+	open,
+	distVersion
 ) where
 
 import Data.List
@@ -179,3 +180,9 @@ bydistname pkgs = Map.fromList [ (zapVers (fromMaybe undefined dn), p)
 			       ]
 	where
 		zapVers s = subRegex (mkRegex "-[0-9.]*$") s ""
+
+-- Extract the version number from a Pkgs distnme.
+distVersion :: Pkg -> String
+distVersion = xv . fromJust . distname
+	where
+		xv = head . fromJust . matchRegex (mkRegex "-([0-9.]*)$")
