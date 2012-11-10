@@ -21,6 +21,7 @@ HCFLAGS=	-O2 \
 		-package HDBC-sqlite3 \
 		-package directory \
 		-package filepath \
+		-package hackage-db \
 		-package regex-compat \
 		-main-is RHPWK
 

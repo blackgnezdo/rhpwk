@@ -19,11 +19,15 @@ import Database.Sqlports
 import Database.GhcPkg
 import Data.List (isSuffixOf)
 import Data.Map hiding (map)
+import Data.Maybe
+import Data.Version
 import Distribution.InstalledPackageInfo
 import Distribution.Package
+import qualified Distribution.PackageDescription as PD
 import Prelude hiding (lookup)
 import System.Console.GetOpt
 import System.Environment
+import qualified Distribution.Hackage.DB as DB
 
 data Flag = All | Dump | Pkgs deriving (Eq, Show)
 
@@ -55,7 +59,8 @@ main = do
 								hps <- hspkgs c
 								close c
 								ips <- installedpkgs
-								mapM_ (processFile ips hps) fs
+								hdb <- DB.readHackage
+								mapM_ (processFile ips hps hdb) fs
 		_	      ->	ioError (userError usage)
 
 unPkgName (PackageName n) = n
@@ -77,24 +82,34 @@ dumpPkgs all = do
 
 processFile ::    Map String InstalledPackageInfo
 	       -> Map String Pkg
+	       -> DB.Hackage
 	       -> String
 	       -> IO ()
-processFile ipkgs hpkgs f =
+processFile ipkgs hpkgs hdb f =
 	if ".cabal" `isSuffixOf` f
 	then foo f
-	else findPkg ipkgs hpkgs f
+	else findPkg ipkgs hpkgs hdb f
+
+latest :: Map Version PD.GenericPackageDescription -> PD.GenericPackageDescription
+latest pkgs = fromJust $ lookup (maximum $ keys pkgs) pkgs
 
 findPkg ::    Map String InstalledPackageInfo
 	   -> Map String Pkg
+	   -> DB.Hackage
 	   -> String
 	   -> IO ()
-findPkg ipkgs hpkgs p = do
+findPkg ipkgs hpkgs hdb p = do
 	let pkgs' = bydistname $ elems hpkgs
 	case lookup p pkgs' of
 		Just pkg ->	putStrLn $
-				"sqlports:\t" ++ fullpkgpath pkg
+				"sqlports:\t" ++ (fullpkgpath pkg) ++ " (" ++ (show $ distname pkg) ++ ")"
 		Nothing  ->	return ()
 	case lookup p ipkgs of
 		Just pkg ->	putStrLn $
-				"ghc-pkg:\t" ++ (ipkgpath pkg)
+				"ghc-pkg:\t" ++ (ipkgpath pkg) ++ " (" ++ (showVersion $ pkgVersion $ sourcePackageId pkg)
+				++ ")"
 		Nothing  ->	return ()
+	case lookup p hdb of
+		Just pkg ->	putStrLn $
+				"hackage:\t" ++ (show $ PD.package $ PD.packageDescription $ latest $ pkg)
+		Nothing ->	return ()
