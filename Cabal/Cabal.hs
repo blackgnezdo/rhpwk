@@ -18,6 +18,7 @@ module Cabal.Cabal (
 
 import Control.Monad
 import Data.Maybe
+import Data.Version
 import Distribution.Compiler
 import Distribution.Package
 import Distribution.PackageDescription.Configuration
@@ -63,4 +64,20 @@ foo f = do
 printDeps :: String -> [Dependency] -> IO ()
 printDeps what ds = do
 	print what
-	mapM_ print ds
+	mapM_ print $ map printDep ds
+
+printDep :: Dependency -> (String, [String])
+printDep (Dependency (PackageName pkg) vr) =
+	(pkg, map printVI $ asVersionIntervals vr)
+
+printVI :: VersionInterval -> String
+printVI (LowerBound (Version [0] []) InclusiveBound, NoUpperBound) = ""
+printVI (LowerBound lv lb, NoUpperBound) = printB '>' lb ++ showVersion lv
+printVI (LowerBound lv InclusiveBound, UpperBound uv InclusiveBound)
+	| lv == uv = '=' : showVersion lv
+printVI (LowerBound lv lb, UpperBound uv ub) =
+	printB '>' lb ++ showVersion lv ++ "," ++ printB '<' ub ++ showVersion uv
+
+printB :: Char -> Bound -> String
+printB op InclusiveBound = op : "="
+printB op ExclusiveBound = [op]
