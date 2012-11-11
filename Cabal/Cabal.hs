@@ -13,7 +13,7 @@
 -- OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 module Cabal.Cabal (
-	foo
+	dumpCabalDeps
 ) where
 
 import Control.Monad
@@ -29,8 +29,8 @@ import Distribution.Verbosity
 import Distribution.Version
 import System.FilePath
 
-foo :: FilePath -> IO()
-foo f = do
+dumpCabalDeps :: FilePath -> IO()
+dumpCabalDeps f = do
 	gp <- readPackageDescription silent f
 	-- Stupid API alert!
 	let flags = []

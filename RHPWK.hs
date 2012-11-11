@@ -87,7 +87,7 @@ processFile ::    Map String InstalledPackageInfo
 	       -> IO ()
 processFile ipkgs hpkgs hdb f =
 	if ".cabal" `isSuffixOf` f
-	then foo f
+	then dumpCabalDeps f
 	else findPkg ipkgs hpkgs hdb f
 
 latest :: Map Version PD.GenericPackageDescription -> PD.GenericPackageDescription
