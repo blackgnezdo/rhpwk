@@ -37,6 +37,7 @@ data Pkg = Pkg {
 	fullpkgpath :: String,
 	pkgpath :: String,
 	distname :: Maybe String,
+	pkgname :: String,
 	multi :: Bool,
 	deps :: [Dependency]
 } deriving (Show, Eq)
@@ -106,6 +107,7 @@ getpkgs constr c = do
 			\  pa1.fullpkgpath, \\
 			\  pa2.fullpkgpath as pkgpath, \\
 			\  ports.distname, \\
+			\  ports.pkgname, \\
 			\  multi.fullpkgpath IS NOT NULL as multi, \\
 			\  pa3.fullpkgpath as dependspath, \\
 			\  d.pkgspec, \\
@@ -134,13 +136,14 @@ getpkgs constr c = do
 		return pmap
 	where
 
-		toPkg rs@([f, p, d, m, _, _, _] : _) =
+		toPkg rs@([f, p, d, n, m, _, _, _] : _) =
 			let f' = fromSql f
 			    p' = fromSql p
 			    d' = fromSql d
+			    n' = fromSql n
 			    m' = fromSql m
 			in
-			    collectdeps (Pkg f' p' d' m' undefined) (map (drop 4) rs)
+			    collectdeps (Pkg f' p' d' n' m' undefined) (map (drop 5) rs)
 
 		collectdeps p rs =
 			let rs' = filter (all (/= SqlNull)) rs
