@@ -46,6 +46,6 @@ ${PROG}: ${OBJS}
 .PHONY: depend
 depend: ${SRCS}
 	@rm -f .depend
-	${HC} -M -dep-makefile .depend ${HCFLAGS} ${.ALLSRC}
+	${HC} -M -dep-makefile .depend -dep-suffix '' ${HCFLAGS} ${.ALLSRC}
 
 .include <bsd.prog.mk>
