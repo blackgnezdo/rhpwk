@@ -1,5 +1,5 @@
 # To build this, you have to
-#	pkg_add ghc hs-HDBC hs-HDBC-sqlite3 hs-regex-compat
+#	pkg_add ghc hs-HDBC hs-HDBC-sqlite3 hs-regex-compat hs-hackage-db
 #
 # Then
 #	make depend && make
