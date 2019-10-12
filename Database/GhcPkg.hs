@@ -29,13 +29,13 @@ import System.FilePath
 -- mapped by the PackageName.
 installedpkgs :: IO (Map String InstalledPackageInfo)
 installedpkgs = do
-	let path = GHCPKGDB
+	let path = "/usr/local/lib/ghc/package.conf.d"
 	fs <- getDirectoryContents path
 	let confs = filter (".conf" `isSuffixOf`) fs
 	pkgs <- mapM parsePkgInfo $ map (path </>) confs
 	return $ Map.fromList [ (unPkgName $ pkgName $ sourcePackageId p, p) | p <- pkgs ]
 	where
-		unPkgName (PackageName n) = n
+		unPkgName = unPackageName
 
 parsePkgInfo :: FilePath -> IO InstalledPackageInfo
 parsePkgInfo f = do

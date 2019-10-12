@@ -63,7 +63,7 @@ dependsType "R" = RunDepends
 dependsType "Regress" = RegressDepends
 
 open :: IO Connection
-open = connectSqlite3 SQLPORTSPATH
+open = connectSqlite3 "/usr/local/share/sqlports"
 
 close :: Connection -> IO ()
 close = disconnect
@@ -80,8 +80,8 @@ hspkgs c = do
 		-- For sqlports (not -compact), this was:
 		-- JOIN depends d2 USING (fullpkgpath)
 		-- WHERE d2.dependspath = 'lang/ghc'
-		pmap <- getpkgs "JOIN depends d2 USING (fullpkgpath) \\
-				\JOIN paths pa4 ON d2.dependspath = pa4.id \\
+		pmap <- getpkgs "JOIN depends d2 USING (fullpkgpath) \
+				\JOIN paths pa4 ON d2.dependspath = pa4.id \
 				\WHERE pa4.fullpkgpath = 'lang/ghc'"
 				c
 		return $ pkgClosure pmap
@@ -103,30 +103,30 @@ getpkgs constr c = do
 		-- <++ constr ++>
 		-- ORDER BY fullpkgpath, d.dependspath, d.type;
 		stmt <- prepare c $
-			"SELECT DISTINCT \\
-			\  pa1.fullpkgpath, \\
-			\  pa2.fullpkgpath as pkgpath, \\
-			\  ports.distname, \\
-			\  ports.pkgname, \\
-			\  multi.fullpkgpath IS NOT NULL as multi, \\
-			\  pa3.fullpkgpath as dependspath, \\
-			\  d.pkgspec, \\
-			\  CASE d.type \\
-			\    WHEN 0 THEN 'L' \\
-			\    WHEN 1 THEN 'R' \\
-			\    WHEN 2 THEN 'B' \\
-			\    WHEN 3 THEN 'Regress' \\
-			\  END as type \\
-			\FROM ports \\
-			\JOIN paths pa1 ON ports.fullpkgpath = pa1.id \\
-			\JOIN paths pa2 ON pa1.pkgpath = pa2.id \\
-			\LEFT JOIN multi ON ports.fullpkgpath = multi.fullpkgpath \\
-			\LEFT JOIN depends d USING (fullpkgpath) \\
+			"SELECT DISTINCT \
+			\  pa1.fullpkgpath, \
+			\  pa2.fullpkgpath as pkgpath, \
+			\  ports.distname, \
+			\  ports.pkgname, \
+			\  multi.fullpkgpath IS NOT NULL as multi, \
+			\  pa3.fullpkgpath as dependspath, \
+			\  d.pkgspec, \
+			\  CASE d.type \
+			\    WHEN 0 THEN 'L' \
+			\    WHEN 1 THEN 'R' \
+			\    WHEN 2 THEN 'B' \
+			\    WHEN 3 THEN 'Regress' \
+			\  END as type \
+			\FROM ports \
+			\JOIN paths pa1 ON ports.fullpkgpath = pa1.id \
+			\JOIN paths pa2 ON pa1.pkgpath = pa2.id \
+			\LEFT JOIN multi ON ports.fullpkgpath = multi.fullpkgpath \
+			\LEFT JOIN depends d USING (fullpkgpath) \
 			\LEFT JOIN paths pa3 ON d.dependspath = pa3.id"
 			++ " " ++ constr ++ " " ++
-			"ORDER BY \\
-			\  pa1.fullpkgpath, \\
-			\  pa3.fullpkgpath, \\
+			"ORDER BY \
+			\  pa1.fullpkgpath, \
+			\  pa3.fullpkgpath, \
 			\  type"
 		execute stmt []
 		rows <- fetchAllRows' stmt

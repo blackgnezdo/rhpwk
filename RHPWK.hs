@@ -21,12 +21,14 @@ import Data.List (isSuffixOf)
 import Data.Map hiding (map)
 import Data.Maybe
 import Data.Version
+import Distribution.Types.Version (mkVersion')
 import Distribution.InstalledPackageInfo
 import Distribution.Package
 import qualified Distribution.PackageDescription as PD
 import Prelude hiding (lookup)
 import System.Console.GetOpt
 import System.Environment
+import Distribution.Pretty (prettyShow)
 import qualified Distribution.Hackage.DB as DB
 
 data Flag = All | Dump | Pkgs deriving (Eq, Show)
@@ -59,13 +61,16 @@ main = do
 								hps <- hspkgs c
 								close c
 								ips <- installedpkgs
-								hdb <- DB.readHackage
+								hdb <- readHackage
 								mapM_ (processFile ips hps hdb) fs
 		_	      ->	ioError (userError usage)
 
-unPkgName (PackageName n) = n
+
+readHackage :: IO DB.HackageDB
+readHackage = DB.hackageTarball >>= DB.readTarball Nothing
+
 ppkgpath = Database.Sqlports.pkgpath
-ipkgpath = Distribution.InstalledPackageInfo.pkgpath
+ipkgpath = fromMaybe "ipkgpath" . pkgRoot
 
 dumpWith :: (Connection -> IO (Map String Pkg)) -> IO ()
 dumpWith f = do
@@ -82,7 +87,7 @@ dumpPkgs all = do
 
 processFile ::    Map String InstalledPackageInfo
 	       -> Map String Pkg
-	       -> DB.Hackage
+	       -> DB.HackageDB
 	       -> String
 	       -> IO ()
 processFile ipkgs hpkgs hdb f =
@@ -95,7 +100,7 @@ latest pkgs = fromJust $ lookup (maximum $ keys pkgs) pkgs
 
 findPkg ::    Map String InstalledPackageInfo
 	   -> Map String Pkg
-	   -> DB.Hackage
+	   -> DB.HackageDB
 	   -> String
 	   -> IO ()
 findPkg ipkgs hpkgs hdb p = do
@@ -106,10 +111,13 @@ findPkg ipkgs hpkgs hdb p = do
 		Nothing  ->	return ()
 	case lookup p ipkgs of
 		Just pkg ->	putStrLn $
-				"ghc-pkg:\t" ++ (ipkgpath pkg) ++ " (" ++ (showVersion $ pkgVersion $ sourcePackageId pkg)
+				"ghc-pkg:\t" ++ (ipkgpath pkg) ++ " (" ++ (prettyShow $ pkgVersion $ sourcePackageId pkg)
 				++ ")"
 		Nothing  ->	return ()
-	case lookup p hdb of
+	case lookup (mkPackageName p) hdb of
 		Just pkg ->	putStrLn $
-				"hackage:\t" ++ (show $ PD.package $ PD.packageDescription $ latest $ pkg)
+				"hackage:\t" ++ show (ver pkg)
 		Nothing ->	return ()
+
+-- ver :: DB.PackageData -> PD.GenericPackageDescription
+ver = {- PD.package . PD.packageDescription . (-}  id
