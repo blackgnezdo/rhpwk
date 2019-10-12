@@ -18,39 +18,47 @@ module Cabal.Cabal (
 
 import Control.Monad
 import Data.Maybe
-import Data.Version
+import Data.Version hiding (showVersion)
 import Distribution.Compiler
 import Distribution.Package
-import Distribution.PackageDescription.Configuration
+import Distribution.Types.PackageName
+import Distribution.PackageDescription.Configuration (finalizePD)
 import Distribution.PackageDescription
-import Distribution.PackageDescription.Parse
+import Distribution.PackageDescription.Parsec (readGenericPackageDescription)
+import Distribution.Types.ComponentRequestedSpec (defaultComponentRequestedSpec)
 import Distribution.System
 import Distribution.Verbosity
 import Distribution.Version
+import Distribution.Types.ExeDependency
+import Distribution.Simple.BuildToolDepends
+
+
 import System.FilePath
 
 dumpCabalDeps :: FilePath -> IO()
 dumpCabalDeps f = do
-	gp <- readPackageDescription silent f
+	gp <- readGenericPackageDescription silent f
 	-- Stupid API alert!
-	let flags = []
+	let flags = mempty  -- No special flags
+            spec = defaultComponentRequestedSpec
 	    checkDep = const True
 	    plat = buildPlatform
-	    -- XXX use the actual compiler version instead of
-	    -- hardcoding it here. And why isn't there a buildCompilerId
-	    -- constant available?
-	    compiler = CompilerId buildCompilerFlavor $ Version [7, 8] []
+	    compiler = unknownCompilerInfo buildCompilerId NoAbiTag
 	    extraDeps = []
-	    (Right (p, flags')) = finalizePackageDescription flags checkDep plat compiler extraDeps gp
+            -- Either [Dependency] (PackageDescription, FlagAssignment)
+	    (Right (p, flags')) = finalizePD flags spec checkDep plat compiler extraDeps gp
 	    lib = library p
 	    execs = executables p
 	    hasLib = isJust lib
 	    hasExecs = not $ null $ execs
 	    libDeps = targetBuildDepends $ libBuildInfo $ fromJust lib
 	    execDeps = concatMap (targetBuildDepends . buildInfo) execs
-	    buildDeps = concatMap buildTools $ allBuildInfo p
+            allBuilds :: [BuildInfo]
+            allBuilds = allBuildInfo p
+            buildDeps :: [ExeDependency]
+	    buildDeps = concatMap (getAllToolDependencies p) allBuilds
 	unless (null buildDeps) $
-		printDeps "BUILD_DEPENDS" buildDeps
+		printExeDeps "BUILD_DEPENDS" buildDeps
 	if (hasLib && hasExecs) then do
 		printDeps "RUN_DEPENDS-lib" libDeps
 		printDeps "RUN_DEPENDS-main"  execDeps
@@ -61,17 +69,22 @@ dumpCabalDeps f = do
 	else
 		return ()
 
+printExeDeps :: String -> [ExeDependency] -> IO ()
+printExeDeps what ds = do
+	print what
+	mapM_ print $ map show ds
+  
 printDeps :: String -> [Dependency] -> IO ()
 printDeps what ds = do
 	print what
 	mapM_ print $ map printDep ds
 
 printDep :: Dependency -> (String, [String])
-printDep (Dependency (PackageName pkg) vr) =
-	(pkg, map printVI $ asVersionIntervals vr)
+printDep (Dependency pkg vr) =
+	(unPackageName pkg, map printVI $ asVersionIntervals vr)
 
 printVI :: VersionInterval -> String
-printVI (LowerBound (Version [0] []) InclusiveBound, NoUpperBound) = ""
+printVI (LowerBound lv InclusiveBound, NoUpperBound) | lv == mkVersion [0] = ""
 printVI (LowerBound lv lb, NoUpperBound) = printB '>' lb ++ showVersion lv
 printVI (LowerBound lv InclusiveBound, UpperBound uv InclusiveBound)
 	| lv == uv = '=' : showVersion lv
