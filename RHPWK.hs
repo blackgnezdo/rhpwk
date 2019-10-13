@@ -12,8 +12,6 @@
 -- ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 -- OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-{-# Language ScopedTypeVariables #-}
-
 module RHPWK (main) where
 
 import Cabal.Cabal
@@ -22,7 +20,6 @@ import Database.GhcPkg
 import Data.List (isSuffixOf)
 import Data.Map hiding (map)
 import Data.Maybe
-import Data.Version
 import Distribution.InstalledPackageInfo
 import Distribution.Package
 import qualified Distribution.PackageDescription as PD
@@ -70,8 +67,11 @@ main = do
 readHackage :: IO DB.HackageDB
 readHackage = DB.hackageTarball >>= DB.readTarball Nothing
 
+ppkgpath :: Pkg -> String
 ppkgpath = Database.Sqlports.pkgpath
-ipkgpath = fromMaybe "ipkgpath" . pkgRoot
+
+ipkgpath :: InstalledPackageInfo -> String
+ipkgpath = const "TODO: ipkgpath"
 
 dumpWith :: (Connection -> IO (Map String Pkg)) -> IO ()
 dumpWith f = do
@@ -96,15 +96,13 @@ processFile ipkgs hpkgs hdb f =
 	then dumpCabalDeps f
 	else findPkg ipkgs hpkgs hdb f
 
-latest :: Map Version PD.GenericPackageDescription -> PD.GenericPackageDescription
-latest pkgs = fromJust $ lookup (maximum $ keys pkgs) pkgs
-
 findPkg ::    Map String InstalledPackageInfo
 	   -> Map String Pkg
 	   -> DB.HackageDB
 	   -> String
 	   -> IO ()
 findPkg ipkgs hpkgs hdb p = do
+  print p
   let pkgs' = bydistname $ elems hpkgs
       printJust x f = maybe (pure ()) (putStrLn . f) x
   printJust (lookup p pkgs') $ \pkg ->
@@ -112,11 +110,11 @@ findPkg ipkgs hpkgs hdb p = do
   printJust (lookup p ipkgs) $ \pkg ->
     "ghc-pkg:\t" <> (ipkgpath pkg) <>
     " (" <> (prettyShow $ pkgVersion $ sourcePackageId pkg) <> ")"
-  printJust (lookup (mkPackageName p) hdb) $ \(pkg :: DB.PackageData) ->
-    "hackage:\t" <> ver pkg
+  printJust (lookup (mkPackageName p) hdb) $ \pkg ->
+    "hackage:\t" <> latestFromPackageHackage pkg
 
-ver :: DB.PackageData -> String
-ver m = fromMaybe "not found" latest
+latestFromPackageHackage :: DB.PackageData -> String
+latestFromPackageHackage m = fromMaybe "not found" latest
   where latest =
-          prettyShow . pkgVersion . PD.package . PD.packageDescription . DB.cabalFile . fst
-          <$> maxView m
+          prettyShow . pkgVersion . PD.package . PD.packageDescription
+          . DB.cabalFile . fst <$> maxView m

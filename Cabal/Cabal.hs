@@ -34,7 +34,7 @@ import Distribution.Pretty (prettyShow)
 import Distribution.Simple.BuildToolDepends (getAllToolDependencies)
 import Distribution.System (buildPlatform)
 import Distribution.Types.ComponentRequestedSpec (defaultComponentRequestedSpec)
-import Distribution.Types.ExeDependency (ExeDependency)
+import Distribution.Types.ExeDependency (ExeDependency(..))
 import Distribution.Types.PackageName (unPackageName)
 import Distribution.Verbosity (silent)
 import Distribution.Version
@@ -42,6 +42,7 @@ import Distribution.Version
   , LowerBound(..)
   , UpperBound(..)
   , VersionInterval
+  , VersionRange
   , asVersionIntervals
   , version0
   )
@@ -57,6 +58,7 @@ refineDescription gp =
 
 dumpCabalDeps :: FilePath -> IO ()
 dumpCabalDeps f = do
+  putStrLn $ " --- " <> f
   descr <- refineDescription <$> readGenericPackageDescription silent f
   let p = either (error . show) id descr
       lib = library p
@@ -66,24 +68,30 @@ dumpCabalDeps f = do
       libDeps = targetBuildDepends $ libBuildInfo $ fromJust lib
       execDeps = concatMap (targetBuildDepends . buildInfo) execs
       allBuilds = allBuildInfo p :: [BuildInfo]
-      buildDeps = concatMap (getAllToolDependencies p) allBuilds ::  [ExeDependency]
+      buildDeps = concatMap (getAllToolDependencies p) allBuilds
   unless (null buildDeps) $
           printExeDeps "BUILD_DEPENDS" buildDeps
   if (hasLib && hasExecs) then do
           printDeps "RUN_DEPENDS-lib" libDeps
           printDeps "RUN_DEPENDS-main"  execDeps
   else if hasLib then
-          printDeps "1 RUN_DEPENDS" libDeps
+          printDeps "RUN_DEPENDS" libDeps
   else if hasExecs then
-          printDeps "2 RUN_DEPENDS" execDeps
+          printDeps "RUN_DEPENDS" execDeps
   else
           return ()
 
 printExeDeps :: String -> [ExeDependency] -> IO ()
 printExeDeps what ds = do
 	print what
-	mapM_ print $ map show ds
-  
+	mapM_ print $ map exeDep ds
+
+exeDep :: ExeDependency -> (String, [String])
+exeDep (ExeDependency pkg _ vs) = (unPackageName pkg, printVR vs)
+
+printVR :: VersionRange -> [String]
+printVR = map printVI . asVersionIntervals
+
 printDeps :: String -> [Dependency] -> IO ()
 printDeps what ds = do
 	print what
