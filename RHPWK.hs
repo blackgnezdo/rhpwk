@@ -12,6 +12,8 @@
 -- ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 -- OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+{-# Language ScopedTypeVariables #-}
+
 module RHPWK (main) where
 
 import Cabal.Cabal
@@ -21,7 +23,6 @@ import Data.List (isSuffixOf)
 import Data.Map hiding (map)
 import Data.Maybe
 import Data.Version
-import Distribution.Types.Version (mkVersion')
 import Distribution.InstalledPackageInfo
 import Distribution.Package
 import qualified Distribution.PackageDescription as PD
@@ -104,20 +105,18 @@ findPkg ::    Map String InstalledPackageInfo
 	   -> String
 	   -> IO ()
 findPkg ipkgs hpkgs hdb p = do
-	let pkgs' = bydistname $ elems hpkgs
-	case lookup p pkgs' of
-		Just pkg ->	putStrLn $
-				"sqlports:\t" ++ (fullpkgpath pkg) ++ " (" ++ (distVersion pkg) ++ ")"
-		Nothing  ->	return ()
-	case lookup p ipkgs of
-		Just pkg ->	putStrLn $
-				"ghc-pkg:\t" ++ (ipkgpath pkg) ++ " (" ++ (prettyShow $ pkgVersion $ sourcePackageId pkg)
-				++ ")"
-		Nothing  ->	return ()
-	case lookup (mkPackageName p) hdb of
-		Just pkg ->	putStrLn $
-				"hackage:\t" ++ show (ver pkg)
-		Nothing ->	return ()
+  let pkgs' = bydistname $ elems hpkgs
+      printJust x f = maybe (pure ()) (putStrLn . f) x
+  printJust (lookup p pkgs') $ \pkg ->
+    "sqlports:\t" <> (fullpkgpath pkg) <> " (" <> (distVersion pkg) <> ")"
+  printJust (lookup p ipkgs) $ \pkg ->
+    "ghc-pkg:\t" <> (ipkgpath pkg) <>
+    " (" <> (prettyShow $ pkgVersion $ sourcePackageId pkg) <> ")"
+  printJust (lookup (mkPackageName p) hdb) $ \(pkg :: DB.PackageData) ->
+    "hackage:\t" <> ver pkg
 
--- ver :: DB.PackageData -> PD.GenericPackageDescription
-ver = {- PD.package . PD.packageDescription . (-}  id
+ver :: DB.PackageData -> String
+ver m = fromMaybe "not found" latest
+  where latest =
+          prettyShow . pkgVersion . PD.package . PD.packageDescription . DB.cabalFile . fst
+          <$> maxView m

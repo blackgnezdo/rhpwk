@@ -16,58 +16,68 @@ module Cabal.Cabal (
 	dumpCabalDeps
 ) where
 
-import Control.Monad
-import Data.Maybe
-import Data.Version hiding (showVersion)
-import Distribution.Compiler
-import Distribution.Package
-import Distribution.Types.PackageName
-import Distribution.PackageDescription.Configuration (finalizePD)
+import Control.Monad (unless)
+import Data.Maybe (fromJust, isJust)
+import Distribution.Compiler (AbiTag(..), buildCompilerId, unknownCompilerInfo)
+import Distribution.Package (Dependency(..))
 import Distribution.PackageDescription
+  ( BuildInfo(..)
+  , GenericPackageDescription
+  , PackageDescription(..)
+  , allBuildInfo
+  , buildInfo
+  , libBuildInfo
+  )
+import Distribution.PackageDescription.Configuration (finalizePD)
 import Distribution.PackageDescription.Parsec (readGenericPackageDescription)
+import Distribution.Pretty (prettyShow)
+import Distribution.Simple.BuildToolDepends (getAllToolDependencies)
+import Distribution.System (buildPlatform)
 import Distribution.Types.ComponentRequestedSpec (defaultComponentRequestedSpec)
-import Distribution.System
-import Distribution.Verbosity
+import Distribution.Types.ExeDependency (ExeDependency)
+import Distribution.Types.PackageName (unPackageName)
+import Distribution.Verbosity (silent)
 import Distribution.Version
-import Distribution.Types.ExeDependency
-import Distribution.Simple.BuildToolDepends
+  ( Bound(..)
+  , LowerBound(..)
+  , UpperBound(..)
+  , VersionInterval
+  , asVersionIntervals
+  , version0
+  )
 
+refineDescription :: GenericPackageDescription -> Either [Dependency] PackageDescription
+refineDescription gp =
+  let spec = defaultComponentRequestedSpec
+      checkDep = const True
+      plat = buildPlatform
+      compiler = unknownCompilerInfo buildCompilerId NoAbiTag
+      extraDeps = []
+  in fst <$> finalizePD mempty spec checkDep plat compiler extraDeps gp
 
-import System.FilePath
-
-dumpCabalDeps :: FilePath -> IO()
+dumpCabalDeps :: FilePath -> IO ()
 dumpCabalDeps f = do
-	gp <- readGenericPackageDescription silent f
-	-- Stupid API alert!
-	let flags = mempty  -- No special flags
-            spec = defaultComponentRequestedSpec
-	    checkDep = const True
-	    plat = buildPlatform
-	    compiler = unknownCompilerInfo buildCompilerId NoAbiTag
-	    extraDeps = []
-            -- Either [Dependency] (PackageDescription, FlagAssignment)
-	    (Right (p, flags')) = finalizePD flags spec checkDep plat compiler extraDeps gp
-	    lib = library p
-	    execs = executables p
-	    hasLib = isJust lib
-	    hasExecs = not $ null $ execs
-	    libDeps = targetBuildDepends $ libBuildInfo $ fromJust lib
-	    execDeps = concatMap (targetBuildDepends . buildInfo) execs
-            allBuilds :: [BuildInfo]
-            allBuilds = allBuildInfo p
-            buildDeps :: [ExeDependency]
-	    buildDeps = concatMap (getAllToolDependencies p) allBuilds
-	unless (null buildDeps) $
-		printExeDeps "BUILD_DEPENDS" buildDeps
-	if (hasLib && hasExecs) then do
-		printDeps "RUN_DEPENDS-lib" libDeps
-		printDeps "RUN_DEPENDS-main"  execDeps
-	else if hasLib then
-		printDeps "RUN_DEPENDS" libDeps
-	else if hasExecs then
-		printDeps "RUN_DEPENDS" execDeps
-	else
-		return ()
+  descr <- refineDescription <$> readGenericPackageDescription silent f
+  let p = either (error . show) id descr
+      lib = library p
+      execs = executables p
+      hasLib = isJust lib
+      hasExecs = not $ null $ execs
+      libDeps = targetBuildDepends $ libBuildInfo $ fromJust lib
+      execDeps = concatMap (targetBuildDepends . buildInfo) execs
+      allBuilds = allBuildInfo p :: [BuildInfo]
+      buildDeps = concatMap (getAllToolDependencies p) allBuilds ::  [ExeDependency]
+  unless (null buildDeps) $
+          printExeDeps "BUILD_DEPENDS" buildDeps
+  if (hasLib && hasExecs) then do
+          printDeps "RUN_DEPENDS-lib" libDeps
+          printDeps "RUN_DEPENDS-main"  execDeps
+  else if hasLib then
+          printDeps "1 RUN_DEPENDS" libDeps
+  else if hasExecs then
+          printDeps "2 RUN_DEPENDS" execDeps
+  else
+          return ()
 
 printExeDeps :: String -> [ExeDependency] -> IO ()
 printExeDeps what ds = do
@@ -85,11 +95,11 @@ printDep (Dependency pkg vr) =
 
 printVI :: VersionInterval -> String
 printVI (LowerBound lv InclusiveBound, NoUpperBound) | lv == version0 = ""
-printVI (LowerBound lv lb, NoUpperBound) = printB '>' lb ++ showVersion  lv
+printVI (LowerBound lv lb, NoUpperBound) = printB '>' lb ++ prettyShow  lv
 printVI (LowerBound lv InclusiveBound, UpperBound uv InclusiveBound)
-	| lv == uv = '=' : showVersion lv
+	| lv == uv = '=' : prettyShow lv
 printVI (LowerBound lv lb, UpperBound uv ub) =
-	printB '>' lb ++ showVersion lv ++ "," ++ printB '<' ub ++ showVersion uv
+	printB '>' lb ++ prettyShow lv ++ "," ++ printB '<' ub ++ prettyShow uv
 
 printB :: Char -> Bound -> String
 printB op InclusiveBound = op : "="

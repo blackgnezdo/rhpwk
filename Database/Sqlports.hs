@@ -30,7 +30,6 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Database.HDBC
 import Database.HDBC.Sqlite3
-import System.IO
 import Text.Regex
 
 data Pkg = Pkg {
