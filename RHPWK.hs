@@ -15,19 +15,19 @@
 module RHPWK (main) where
 
 import Cabal.Cabal
-import Database.Sqlports
-import Database.GhcPkg
 import Data.List (isSuffixOf)
 import Data.Map hiding (map)
 import Data.Maybe
+import Database.GhcPkg
+import Database.Sqlports
 import Distribution.InstalledPackageInfo
 import Distribution.Package
-import qualified Distribution.PackageDescription as PD
+import Distribution.Pretty (prettyShow)
 import Prelude hiding (lookup)
 import System.Console.GetOpt
 import System.Environment
-import Distribution.Pretty (prettyShow)
 import qualified Distribution.Hackage.DB as DB
+import qualified Distribution.PackageDescription as PD
 
 data Flag = All | Dump | Pkgs deriving (Eq, Show)
 
@@ -84,7 +84,7 @@ dumpPkgs :: Bool -> IO ()
 dumpPkgs all = do
 	ipkgs <- installedpkgs
 	let ghcpkgs = [ p | p <- elems ipkgs, all || ipkgpath p == "lang/ghc" ]
-	putStr $ unlines $ map show $ ghcpkgs
+	mapM_ (putStrLn . prettyShow . sourcePackageId) ghcpkgs
 
 processFile ::    Map String InstalledPackageInfo
 	       -> Map String Pkg
