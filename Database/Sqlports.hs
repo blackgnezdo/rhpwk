@@ -81,7 +81,7 @@ hspkgs c = do
 		-- JOIN depends d2 USING (fullpkgpath)
 		-- WHERE d2.dependspath = 'lang/ghc'
 		pmap <- getpkgs "JOIN depends d2 USING (fullpkgpath) \
-				\JOIN paths pa4 ON d2.dependspath = pa4.id \
+				\JOIN paths pa4 ON d2.dependspath = pa4.FullPkgPath \
 				\WHERE pa4.fullpkgpath = 'lang/ghc'"
 				c
 		return $ pkgClosure pmap
@@ -118,11 +118,11 @@ getpkgs constr c = do
 			\    WHEN 3 THEN 'Regress' \
 			\  END as type \
 			\FROM ports \
-			\JOIN paths pa1 ON ports.fullpkgpath = pa1.id \
-			\JOIN paths pa2 ON pa1.pkgpath = pa2.id \
+			\JOIN paths pa1 ON ports.fullpkgpath = pa1.FullPkgPath \
+			\JOIN paths pa2 ON pa1.pkgpath = pa2.FullPkgPath \
 			\LEFT JOIN multi ON ports.fullpkgpath = multi.fullpkgpath \
 			\LEFT JOIN depends d USING (fullpkgpath) \
-			\LEFT JOIN paths pa3 ON d.dependspath = pa3.id"
+			\LEFT JOIN paths pa3 ON d.dependspath = pa3.FullPkgPath"
 			++ " " ++ constr ++ " " ++
 			"ORDER BY \
 			\  pa1.fullpkgpath, \
