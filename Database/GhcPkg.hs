@@ -12,9 +12,11 @@
 -- ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 -- OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-module Database.GhcPkg (
-	installedpkgs
-) where
+module Database.GhcPkg
+  ( InstalledPackages
+  , bundledPackages
+  , installedpkgs
+  ) where
 
 import Data.List
 import Data.Map (Map)
@@ -27,21 +29,36 @@ import System.Directory
 import System.FilePath
 import System.Process (readProcess)
 
+
+type InstalledPackages = Map String InstalledPackageInfo
+
 -- Fetch all InstalledPackagesInfos known to ghc (or ghc-pkg),
 -- mapped by the PackageName.
-installedpkgs :: IO (Map String InstalledPackageInfo)
+installedpkgs :: IO InstalledPackages
 installedpkgs = do
-  top <- listToMaybe . filter ("/package.conf.d/" `isInfixOf`) . lines
-           <$> readProcess "pkg_info" ["-L", "ghc"] ""
+  top <- listToMaybe <$> confDirPathsInGhc
   let path = maybe (error "pkg_info -L ghc failed") takeDirectory top
   fs <- getDirectoryContents path
-  let confs = filter (".conf" `isSuffixOf`) fs
-  pkgs <- mapM parsePkgInfo $ map (path </>) confs
+  parseConfigFiles $ map (path </>) $ filter (".conf" `isSuffixOf`) fs
+
+parseConfigFiles :: [FilePath] -> IO InstalledPackages
+parseConfigFiles confs = do
+  pkgs <- mapM (fmap parsePkgInfo . readUTF8File) confs
   return $ Map.fromList [ (unPackageName $ pkgName $ sourcePackageId p, p)
                         | p <- pkgs ]
+  where parsePkgInfo f =
+          case parseInstalledPackageInfo f of
+            ParseOk _ ps  -> ps
+            x -> error $ "Unable to parse " ++ show x
 
-parsePkgInfo :: FilePath -> IO InstalledPackageInfo
-parsePkgInfo f = do
-	c <- readUTF8File f
-	case parseInstalledPackageInfo c of
-		ParseOk _ ps  ->	return ps
+confDirPathsInGhc :: IO [FilePath]
+confDirPathsInGhc =
+  filter ("/package.conf.d/" `isInfixOf`) . lines
+  <$> readProcess "pkg_info" ["-L", "ghc"] ""
+
+-- | Fetches all InstalledPackagesInfos bundled into the ghc package
+-- currently installed on the system.
+bundledPackages :: IO InstalledPackages
+bundledPackages = do
+  fs <- filter (".conf" `isSuffixOf`) <$> confDirPathsInGhc
+  parseConfigFiles fs
