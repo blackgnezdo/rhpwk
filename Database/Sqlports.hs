@@ -21,17 +21,20 @@ module Database.Sqlports (
 	allpkgs,
 	bydistname,
 	open,
-	distVersion
+        distVersion,
+        hackageVersion
 ) where
 
 import Data.List
 import Data.Map (Map)
-import qualified Data.Map as Map
 import Data.Maybe
+import Data.Version (Version, parseVersion)
 import Database.HDBC
 import Database.HDBC.Sqlite3
 import System.Process (readProcess)
+import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.Regex
+import qualified Data.Map as Map
 
 data Pkg = Pkg {
 	fullpkgpath :: String,
@@ -194,3 +197,11 @@ distVersion :: Pkg -> String
 distVersion = xv . fromJust . distname
 	where
 		xv = head . fromJust . matchRegex (mkRegex "-([0-9.]*)$")
+
+-- | Returns the hackage version for the given package if possible.
+hackageVersion :: Pkg -> Maybe Version
+hackageVersion p =
+  let pickFullParse = filter ((== "") . snd) in
+  case pickFullParse $ readP_to_S parseVersion $ distVersion p of
+    [(v, "")] -> Just v
+    _ -> Nothing
