@@ -29,8 +29,7 @@ import System.Directory
 import System.FilePath
 import System.Process (readProcess)
 
-
-type InstalledPackages = Map String InstalledPackageInfo
+type InstalledPackages = Map PackageName InstalledPackageInfo
 
 -- Fetch all InstalledPackagesInfos known to ghc (or ghc-pkg),
 -- mapped by the PackageName.
@@ -44,7 +43,7 @@ installedpkgs = do
 parseConfigFiles :: [FilePath] -> IO InstalledPackages
 parseConfigFiles confs = do
   pkgs <- mapM (fmap parsePkgInfo . readUTF8File) confs
-  return $ Map.fromList [ (unPackageName $ pkgName $ sourcePackageId p, p)
+  return $ Map.fromList [ (pkgName $ sourcePackageId p, p)
                         | p <- pkgs ]
   where parsePkgInfo f =
           case parseInstalledPackageInfo f of

@@ -13,11 +13,15 @@
 -- OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 module Cabal.Cabal (
-	dumpCabalDeps
+    dumpCabalDeps
+  , dumpDepsFromPD
+  , refineDescription
 ) where
 
 import Control.Monad (unless)
 import Data.Maybe (fromJust, isJust)
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Distribution.Compiler (AbiTag(..), buildCompilerId, unknownCompilerInfo)
 import Distribution.Package (Dependency(..))
 import Distribution.PackageDescription
@@ -28,12 +32,14 @@ import Distribution.PackageDescription
   , buildInfo
   , libBuildInfo
   )
+import Distribution.Package (PackageName)
 import Distribution.PackageDescription.Configuration (finalizePD)
 import Distribution.PackageDescription.Parsec (readGenericPackageDescription)
 import Distribution.Pretty (prettyShow)
 import Distribution.Simple.BuildToolDepends (getAllToolDependencies)
 import Distribution.System (buildPlatform)
 import Distribution.Types.ComponentRequestedSpec (defaultComponentRequestedSpec)
+import Distribution.Types.Dependency (depPkgName)
 import Distribution.Types.ExeDependency (ExeDependency(..))
 import Distribution.Types.PackageName (unPackageName)
 import Distribution.Verbosity (silent)
@@ -56,12 +62,15 @@ refineDescription gp =
       extraDeps = []
   in fst <$> finalizePD mempty spec checkDep plat compiler extraDeps gp
 
-dumpCabalDeps :: FilePath -> IO ()
-dumpCabalDeps f = do
+dumpCabalDeps :: Set PackageName -> FilePath -> IO ()
+dumpCabalDeps systemPkgs f = do
   putStrLn $ " --- " <> f
   descr <- refineDescription <$> readGenericPackageDescription silent f
-  let p = either (error . show) id descr
-      lib = library p
+  dumpDepsFromPD systemPkgs $ either (error . show) id descr
+
+dumpDepsFromPD :: Set PackageName -> PackageDescription -> IO ()
+dumpDepsFromPD systemPkgs p = do
+  let lib = library p
       execs = executables p
       hasLib = isJust lib
       hasExecs = not $ null $ execs
@@ -69,15 +78,16 @@ dumpCabalDeps f = do
       execDeps = concatMap (targetBuildDepends . buildInfo) execs
       allBuilds = allBuildInfo p :: [BuildInfo]
       buildDeps = concatMap (getAllToolDependencies p) allBuilds
+      pared ds = [d | d <- ds, not $ depPkgName d `Set.member` systemPkgs]
   unless (null buildDeps) $
           printExeDeps "BUILD_DEPENDS" buildDeps
   if (hasLib && hasExecs) then do
-          printDeps "RUN_DEPENDS-lib" libDeps
-          printDeps "RUN_DEPENDS-main"  execDeps
+          printDeps "RUN_DEPENDS-lib" (pared libDeps)
+          printDeps "RUN_DEPENDS-main" (pared execDeps)
   else if hasLib then
-          printDeps "RUN_DEPENDS" libDeps
+          printDeps "RUN_DEPENDS" (pared libDeps)
   else if hasExecs then
-          printDeps "RUN_DEPENDS" execDeps
+          printDeps "RUN_DEPENDS" (pared execDeps)
   else
           return ()
 
@@ -112,3 +122,4 @@ printVI (LowerBound lv lb, UpperBound uv ub) =
 printB :: Char -> Bound -> String
 printB op InclusiveBound = op : "="
 printB op ExclusiveBound = [op]
+ 
