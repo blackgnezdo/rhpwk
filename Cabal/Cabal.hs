@@ -18,7 +18,7 @@ module Cabal.Cabal (
   , refineDescription
 ) where
 
-import Control.Monad (unless)
+import Control.Monad (forM_)
 import Data.Maybe (fromJust, isJust)
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -66,9 +66,13 @@ dumpCabalDeps :: Set PackageName -> FilePath -> IO ()
 dumpCabalDeps systemPkgs f = do
   putStrLn $ " --- " <> f
   descr <- refineDescription <$> readGenericPackageDescription silent f
-  dumpDepsFromPD systemPkgs $ either (error . show) id descr
+  let frags = dumpDepsFromPD systemPkgs $ either (error . show) id descr
+  forM_ frags $ \(what, ps) -> do
+    putStrLn $ what <> "="
+    forM_ ps $ \(p, rs) -> putStrLn $ "\t" <> p <> concat rs
 
-dumpDepsFromPD :: Set PackageName -> PackageDescription -> IO ()
+
+dumpDepsFromPD :: Set PackageName -> PackageDescription -> [(String, [(String, [String])])]
 dumpDepsFromPD systemPkgs p = do
   let lib = library p
       execs = executables p
@@ -79,33 +83,25 @@ dumpDepsFromPD systemPkgs p = do
       allBuilds = allBuildInfo p :: [BuildInfo]
       buildDeps = concatMap (getAllToolDependencies p) allBuilds
       pared ds = [d | d <- ds, not $ depPkgName d `Set.member` systemPkgs]
-  unless (null buildDeps) $
-          printExeDeps "BUILD_DEPENDS" buildDeps
-  if (hasLib && hasExecs) then do
-          printDeps "RUN_DEPENDS-lib" (pared libDeps)
-          printDeps "RUN_DEPENDS-main" (pared execDeps)
-  else if hasLib then
-          printDeps "RUN_DEPENDS" (pared libDeps)
-  else if hasExecs then
-          printDeps "RUN_DEPENDS" (pared execDeps)
-  else
-          return ()
+    in concat
+       [ [("BUILD_DEPENDS", printExeDep <$> buildDeps)
+         | not $ null buildDeps
+         ]
+       , [( if hasLib then "RUN_DEPENDS-main" else "RUN_DEPENDS"
+          , printDep <$> pared execDeps)
+         | hasExecs
+         ]
+       , [( if hasExecs then "RUN_DEPENDS-lib" else "RUN_DEPENDS"
+          , printDep <$> pared libDeps)
+         | hasLib
+         ]
+       ]
 
-printExeDeps :: String -> [ExeDependency] -> IO ()
-printExeDeps what ds = do
-	print what
-	mapM_ print $ map exeDep ds
-
-exeDep :: ExeDependency -> (String, [String])
-exeDep (ExeDependency pkg _ vs) = (unPackageName pkg, printVR vs)
+printExeDep :: ExeDependency -> (String, [String])
+printExeDep (ExeDependency pkg _ vs) = (unPackageName pkg, printVR vs)
 
 printVR :: VersionRange -> [String]
 printVR = map printVI . asVersionIntervals
-
-printDeps :: String -> [Dependency] -> IO ()
-printDeps what ds = do
-	print what
-	mapM_ print $ map printDep ds
 
 printDep :: Dependency -> (String, [String])
 printDep (Dependency pkg vr) =

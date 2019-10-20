@@ -16,7 +16,7 @@ module RHPWK (main) where
 
 import Cabal.Cabal
 import Control.Exception (bracket)
-import Control.Monad (join)
+import Control.Monad (forM_, join)
 import Database.Sqlports
 import Database.GhcPkg
 import Data.List (isSuffixOf)
@@ -110,7 +110,7 @@ findPkg ipkgs hpkgs hdb p = do
   let pkgs' = bydistname $ Map.elems hpkgs
       printJust x f = maybe (pure ()) (putStrLn . f) x
   printJust (Map.lookup p pkgs') $ \pkg ->
-    "sqlports:\t" <> (fullpkgpath pkg) <> " (" <> (distVersion pkg) <> ")"
+    "sqlports:\t" <> (fullpkgpath pkg) <> " (" <> distVersion pkg <> ")"
   printJust (Map.lookup (mkPackageName p) ipkgs) $ \pkg ->
     "ghc-pkg:\t" <> (ipkgpath pkg) <>
     " (" <> (prettyShow $ pkgVersion $ sourcePackageId pkg) <> ")"
@@ -134,4 +134,9 @@ printHackageDeps p = do
       Just hv = mkVersion' <$> (join $ hackageVersion <$> Map.lookup p pkgs)
   putStrLn $ prettyShow hv
   systemPkgs <- Map.keysSet <$> bundledPackages
-  dumpDepsFromPD systemPkgs pkg
+  let frags = dumpDepsFromPD systemPkgs pkg
+  forM_ frags $ \(what, ps) -> do
+    putStrLn $ what <> "\t= \\"
+    forM_ ps $ \(p, rs) -> do
+       let Just hp = Map.lookup p pkgs
+       putStrLn $ "\t\t" <> fullpkgpath hp <> concat rs <> " \\"
