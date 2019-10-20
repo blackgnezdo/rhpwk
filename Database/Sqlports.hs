@@ -30,6 +30,7 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Database.HDBC
 import Database.HDBC.Sqlite3
+import System.Process (readProcess)
 import Text.Regex
 
 data Pkg = Pkg {
@@ -62,7 +63,12 @@ dependsType "R" = RunDepends
 dependsType "Regress" = RegressDepends
 
 open :: IO Connection
-open = connectSqlite3 "/usr/local/share/sqlports"
+open = do
+  paths <- filter ("/sqlports" `isSuffixOf`) . lines
+           <$> readProcess "pkg_info" ["-L", "sqlports"] ""
+  case paths of
+    [p] -> connectSqlite3 p
+    ps -> error "Unexpected pkg_info output"
 
 close :: Connection -> IO ()
 close = disconnect
@@ -183,7 +189,7 @@ bydistname pkgs = Map.fromList [ (zapVers (fromMaybe undefined dn), p)
 	where
 		zapVers s = subRegex (mkRegex "-[0-9.]*$") s ""
 
--- Extract the version number from a Pkgs distnme.
+-- Extract the version number from a Pkgs distname.
 distVersion :: Pkg -> String
 distVersion = xv . fromJust . distname
 	where
