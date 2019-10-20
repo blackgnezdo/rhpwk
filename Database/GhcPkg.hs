@@ -18,24 +18,27 @@ module Database.GhcPkg (
 
 import Data.List
 import Data.Map (Map)
+import Data.Maybe (listToMaybe)
 import qualified Data.Map as Map
 import Distribution.InstalledPackageInfo
 import Distribution.Package
 import Distribution.Simple.Utils
 import System.Directory
 import System.FilePath
+import System.Process (readProcess)
 
 -- Fetch all InstalledPackagesInfos known to ghc (or ghc-pkg),
 -- mapped by the PackageName.
 installedpkgs :: IO (Map String InstalledPackageInfo)
 installedpkgs = do
-	let path = "/usr/local/lib/ghc/package.conf.d"
-	fs <- getDirectoryContents path
-	let confs = filter (".conf" `isSuffixOf`) fs
-	pkgs <- mapM parsePkgInfo $ map (path </>) confs
-	return $ Map.fromList [ (unPkgName $ pkgName $ sourcePackageId p, p) | p <- pkgs ]
-	where
-		unPkgName = unPackageName
+  top <- listToMaybe . filter ("/package.conf.d/" `isInfixOf`) . lines
+           <$> readProcess "pkg_info" ["-L", "ghc"] ""
+  let path = maybe (error "pkg_info -L ghc failed") takeDirectory top
+  fs <- getDirectoryContents path
+  let confs = filter (".conf" `isSuffixOf`) fs
+  pkgs <- mapM parsePkgInfo $ map (path </>) confs
+  return $ Map.fromList [ (unPackageName $ pkgName $ sourcePackageId p, p)
+                        | p <- pkgs ]
 
 parsePkgInfo :: FilePath -> IO InstalledPackageInfo
 parsePkgInfo f = do
