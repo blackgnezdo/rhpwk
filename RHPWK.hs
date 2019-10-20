@@ -126,13 +126,13 @@ latestFromPackageHackage m = fromMaybe "not found" latest
 printHackageDeps :: String -> IO ()
 printHackageDeps p = do
   hpkgs <- bracket open close hspkgs
-  hdb <- readHackage
-  let Just pkgPd = DB.cabalFile <$>
-        join (Map.lookup hv <$> Map.lookup (mkPackageName p) hdb)
-      Right pkg = refineDescription pkgPd
-      pkgs = bydistname $ Map.elems hpkgs
+  let pkgs = bydistname $ Map.elems hpkgs
       Just hv = mkVersion' <$> (join $ hackageVersion <$> Map.lookup p pkgs)
   putStrLn $ prettyShow hv
+  hdb <- readHackage
+  let Just pkgPd = DB.cabalFile <$>
+                   join (Map.lookup hv <$> Map.lookup (mkPackageName p) hdb)
+      Right pkg = refineDescription pkgPd
   systemPkgs <- Map.keysSet <$> bundledPackages
   let frags = dumpDepsFromPD systemPkgs pkg
   forM_ frags $ \(what, ps) -> do
