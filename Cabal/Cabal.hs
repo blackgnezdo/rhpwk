@@ -108,10 +108,13 @@ printDep (Dependency pkg vr) =
 	(unPackageName pkg, map printVI $ asVersionIntervals vr)
 
 printVI :: VersionInterval -> String
-printVI (LowerBound lv InclusiveBound, NoUpperBound) | lv == version0 = ""
+printVI (LowerBound lv InclusiveBound, NoUpperBound)
+  | lv == version0 = ""
 printVI (LowerBound lv lb, NoUpperBound) = printB '>' lb ++ prettyShow  lv
 printVI (LowerBound lv InclusiveBound, UpperBound uv InclusiveBound)
 	| lv == uv = '=' : prettyShow lv
+printVI (LowerBound lv InclusiveBound, UpperBound uv ub)
+  | lv == version0 = printB '<' ub ++ prettyShow uv
 printVI (LowerBound lv lb, UpperBound uv ub) =
 	printB '>' lb ++ prettyShow lv ++ "," ++ printB '<' ub ++ prettyShow uv
 
