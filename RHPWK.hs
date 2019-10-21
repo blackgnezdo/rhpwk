@@ -15,11 +15,12 @@
 module RHPWK (main) where
 
 import Cabal.Cabal
+import Control.Arrow (first)
 import Control.Exception (bracket)
-import Control.Monad (forM_, join)
+import Control.Monad (forM_)
 import Database.Sqlports
 import Database.GhcPkg
-import Data.List (isSuffixOf)
+import Data.List (isSuffixOf, nub, sort)
 import Data.Maybe
 import Distribution.InstalledPackageInfo
 import Distribution.Package
@@ -27,6 +28,7 @@ import qualified Distribution.PackageDescription as PD
 import Prelude hiding (lookup)
 import System.Console.GetOpt
 import System.Environment
+import System.FilePath
 import Distribution.Pretty (prettyShow)
 import qualified Distribution.Hackage.DB as DB
 import Distribution.Types.Version (mkVersion')
@@ -123,20 +125,48 @@ latestFromPackageHackage m = fromMaybe "not found" latest
           prettyShow . pkgVersion . PD.package . PD.packageDescription
           . DB.cabalFile . fst <$> Map.maxView m
 
-printHackageDeps :: String -> IO ()
-printHackageDeps p = do
+-- | Appends updated dependency information based on hackage
+-- declarations into the Makefiles. The ports become unbuildable but
+-- somewhat convenient to update manually.
+--
+-- TODO: compare the pre-existing declarations with the computed
+-- ones to save resolution work on human's part.
+printHackageDeps :: IO ()
+printHackageDeps = do
   hpkgs <- bracket open close hspkgs
-  let pkgs = bydistname $ Map.elems hpkgs
-      Just hv = mkVersion' <$> (join $ hackageVersion <$> Map.lookup p pkgs)
-  putStrLn $ prettyShow hv
   hdb <- readHackage
-  let Just pkgPd = DB.cabalFile <$>
-                   join (Map.lookup hv <$> Map.lookup (mkPackageName p) hdb)
-      Right pkg = refineDescription pkgPd
   systemPkgs <- Map.keysSet <$> bundledPackages
-  let frags = dumpDepsFromPD systemPkgs pkg
-  forM_ frags $ \(what, ps) -> do
-    putStrLn $ what <> "\t= \\"
-    forM_ ps $ \(p, rs) -> do
-       let Just hp = Map.lookup p pkgs
-       putStrLn $ "\t\t" <> fullpkgpath hp <> concat rs <> " \\"
+  let pkgs = bydistname $ Map.elems hpkgs
+  forM_ (Map.assocs pkgs) $ \(pname, hpkg) -> do
+      let hv = mkVersion'
+               $ fromMaybe (error $ "Can't determine hackage version of " <> pname)
+               $ hackageVersion hpkg
+      putStrLn $ fullpkgpath hpkg <> " " <> pname <> "-" <> prettyShow hv
+      case Map.lookup (mkPackageName pname) hdb of
+        Nothing -> putStrLn $ "Not in hackage " <> pname
+        Just pkgData ->
+          case Map.lookup hv pkgData of
+            Nothing -> putStrLn $ "No version data " <> prettyShow hv
+            Just verData -> do
+              let pkgPd = DB.cabalFile verData
+                  pkg = either (error . show) id $ refineDescription pkgPd
+              let frags =
+                    filter (not . null . snd) $  -- Bug in dumpCabalDeps
+                    dumpDepsFromPD systemPkgs pkg
+                  -- The ??? below happen when pointing to non-existent ports.
+                  -- They aren't necessarily errors because the port may not
+                  -- be built in with flags that require such a dependency.
+                  packetizeName p = maybe ("???" <> p) fullpkgpath $ Map.lookup p pkgs
+                  depListing = unlines $ mconcat [
+                    what <> "\t\t= \\" :
+                    [ "\t\t\t" <> hp <> concat rs <> " \\"
+                    | (hp, rs) <- sort (first packetizeName <$> nub ps)
+                    ]
+                    | (what, ps) <- frags
+                    ]
+              if (not $ null depListing)
+                then do
+                   let name = "/usr/ports" </> pkgpath hpkg </> "Makefile"
+                   appendFile name depListing
+                   putStrLn $ "Appended to " <> name
+                else putStrLn "Nothing to do"
