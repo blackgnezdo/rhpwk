@@ -18,22 +18,22 @@ import Cabal.Cabal
 import Control.Arrow (first)
 import Control.Exception (bracket)
 import Control.Monad (forM_)
-import Database.Sqlports
-import Database.GhcPkg
 import Data.List (isSuffixOf, nub, sort)
+import Data.Map (Map)
 import Data.Maybe
+import Database.GhcPkg
+import Database.Sqlports
 import Distribution.InstalledPackageInfo
 import Distribution.Package
-import qualified Distribution.PackageDescription as PD
+import Distribution.Pretty (prettyShow)
+import Distribution.Types.Version (mkVersion')
 import Prelude hiding (lookup)
 import System.Console.GetOpt
 import System.Environment
 import System.FilePath
-import Distribution.Pretty (prettyShow)
-import qualified Distribution.Hackage.DB as DB
-import Distribution.Types.Version (mkVersion')
-import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Distribution.Hackage.DB as DB
+import qualified Distribution.PackageDescription as PD
 
 data Flag = All | Dump | Pkgs deriving (Eq, Show)
 
