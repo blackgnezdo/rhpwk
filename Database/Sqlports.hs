@@ -1,3 +1,4 @@
+{-# Language OverloadedStrings #-}
 -- Copyright (c) 2010, 2012 Matthias Kilian <kili@outback.escape.de>
 --
 -- Permission to use, copy, modify, and distribute this software for any
@@ -16,6 +17,7 @@ module Database.Sqlports (
 	Connection,
 	Dependency (..),
 	Pkg (..),
+        PkgMap,
 	close,
 	hspkgs,
 	allpkgs,
@@ -25,25 +27,30 @@ module Database.Sqlports (
         hackageVersion
 ) where
 
+import Data.Char (isDigit)
+import Data.Function (on)
 import Data.List
-import Data.Map (Map)
+import Data.Map.Strict (Map)
 import Data.Maybe
 import Data.Version (Version, parseVersion)
 import Database.HDBC
 import Database.HDBC.Sqlite3
 import System.Process (readProcess)
 import Text.ParserCombinators.ReadP (readP_to_S)
-import Text.Regex
-import qualified Data.Map as Map
+import Data.Text (Text)
+import qualified Data.Map.Strict as Map
+import qualified Data.Text as Text
 
 data Pkg = Pkg {
-	fullpkgpath :: String,
-	pkgpath :: String,
-	distname :: Maybe String,
-	pkgname :: String,
+	fullpkgpath :: Text,
+	pkgpath :: Text,
+	distname :: Maybe Text,
+	pkgname :: Text,
 	multi :: Bool,
 	deps :: [Dependency]
 } deriving (Show, Eq)
+
+type PkgMap = Map Text Pkg  -- by fullpkgpath
 
 data DependsType = BuildDepends | LibDepends | RunDepends | RegressDepends
 	deriving (Show, Eq)
@@ -55,11 +62,12 @@ data DependsType = BuildDepends | LibDepends | RunDepends | RegressDepends
 -- 3: parse pkgspecs and transform them into some usable data type
 
 data Dependency = Dependency {
-	dependspath :: String,
-	pkgspec :: String,
+	dependspath :: Text,
+	pkgspec :: Text,
 	dtype :: DependsType
 } deriving (Show, Eq)
 
+dependsType :: Text -> DependsType
 dependsType "B" = BuildDepends
 dependsType "L" = LibDepends
 dependsType "R" = RunDepends
@@ -77,13 +85,13 @@ close :: Connection -> IO ()
 close = disconnect
 
 -- Fetch all Pkgs from sqlports, mapped by fullpkgpath.
-allpkgs :: Connection -> IO (Map String Pkg)
+allpkgs :: Connection -> IO PkgMap
 allpkgs = getpkgs ""
 
 -- Fetch all Pkgs depending on lang/ghc from sqlports, mapped by
 -- fullpkgpath, with dependencies limited to Pkgs also depending
 -- on lang/ghc (i.e.  you won't get dependencies like iconv or gmp).
-hspkgs :: Connection -> IO (Map String Pkg)
+hspkgs :: Connection -> IO PkgMap
 hspkgs c = do
 		-- For sqlports (not -compact), this was:
 		-- JOIN depends d2 USING (fullpkgpath)
@@ -94,7 +102,7 @@ hspkgs c = do
 				c
 		return $ pkgClosure pmap
 
-getpkgs :: String -> Connection -> IO (Map String Pkg)
+getpkgs :: String -> Connection -> IO PkgMap
 getpkgs constr c = do
 		-- For sqlports (not -compact), this was:
 		-- SELECT DISTINCT
@@ -138,26 +146,24 @@ getpkgs constr c = do
 			\  type"
 		execute stmt []
 		rows <- fetchAllRows' stmt
-		let rowss = groupBy (\rs rs' -> take 3 rs == take 3 rs') rows
+		let rowss = groupBy ((==) `on` (take 3)) rows
 		let pkgs = map toPkg rowss
-		let pmap = Map.fromList [(fullpkgpath p, p) | p <- pkgs]
-		return pmap
+		return $! Map.fromList [(fullpkgpath p, p) | p <- pkgs]
 	where
-
-		toPkg rs@([f, p, d, n, m, _, _, _] : _) =
-			let f' = fromSql f
-			    p' = fromSql p
-			    d' = fromSql d
-			    n' = fromSql n
-			    m' = fromSql m
-			in
-			    collectdeps (Pkg f' p' d' n' m' undefined) (map (drop 5) rs)
-
-		collectdeps p rs =
+		toPkg rs@((f: p: d: n: m: _) : _) =
+                  Pkg {
+	            fullpkgpath = fromSql f,
+	            pkgpath = fromSql p,
+	            distname = fromSql d,
+	            pkgname = fromSql n,
+                    multi = fromSql m,
+	            deps = collectdeps (drop 5 <$> rs)
+                  }
+                collectdeps rs =
 			let rs' = filter (all (/= SqlNull)) rs
-			    toDep (d, s, t) = Dependency d s (dependsType t)
-			    ds = map (toDep . \[d, s, t] -> (fromSql d, fromSql s, fromSql t)) rs'
-			in p {deps = ds}
+			    toDep [d, s, t] =
+                              Dependency (fromSql d) (fromSql s) (dependsType (fromSql t))
+			in toDep <$> rs'
 
 -- Given a map of fullpkgnames to Pkgs, remove all dependencies
 -- contained in Pkgs for which no entry exists in the map.
@@ -168,7 +174,7 @@ getpkgs constr c = do
 -- For generic code that wants to deal with non-Haskell ports, this
 -- function won't be of any use.
 --
-pkgClosure :: Map String Pkg -> Map String Pkg
+pkgClosure :: PkgMap -> PkgMap
 pkgClosure ps = Map.map zapNonHsDeps ps
 	where
 		zapNonHsDeps :: Pkg -> Pkg
@@ -181,27 +187,30 @@ pkgClosure ps = Map.map zapNonHsDeps ps
 -- without the version number). For multipackages, only take the
 -- ",-lib" subpackage (probably wrong, but currently, all hs-ports
 -- with multipackage actually have a -main and a -lib subpackage).
-bydistname :: [Pkg] -> Map String Pkg
+bydistname :: [Pkg] -> PkgMap
 bydistname pkgs = Map.fromList [ (zapVers (fromMaybe undefined dn), p)
 			       | p <- pkgs,
 				 let dn = distname p,
 				 isJust dn,
 				 not (multi p) ||
-				 isJust (matchRegex (mkRegex ",-lib$") (fullpkgpath p))
+                                 (",-lib$" `Text.isSuffixOf` fullpkgpath p)
 			       ]
-	where
-		zapVers s = subRegex (mkRegex "-[0-9.]*$") s ""
+	where zapVers = fst . splitByVersion
+
+splitByVersion :: Text -> (Text,Text)
+splitByVersion t = ( Text.init $ Text.dropWhileEnd versionChar t
+                   , Text.takeWhileEnd versionChar t)
+  where versionChar '.' = True
+        versionChar c = isDigit c
 
 -- Extract the version number from a Pkgs distname.
-distVersion :: Pkg -> String
-distVersion = xv . fromJust . distname
-	where
-		xv = head . fromJust . matchRegex (mkRegex "-([0-9.]*)$")
+distVersion :: Pkg -> Text
+distVersion = snd . splitByVersion . fullpkgpath
 
 -- | Returns the hackage version for the given package if possible.
 hackageVersion :: Pkg -> Maybe Version
 hackageVersion p =
   let pickFullParse = filter ((== "") . snd) in
-  case pickFullParse $ readP_to_S parseVersion $ distVersion p of
+  case pickFullParse $ readP_to_S parseVersion $ Text.unpack $ distVersion p of
     [(v, "")] -> Just v
     _ -> Nothing

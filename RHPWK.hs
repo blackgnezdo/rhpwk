@@ -1,3 +1,4 @@
+{-# Language OverloadedStrings #-}
 -- Copyright (c) 2010,2012 Matthias Kilian <kili@outback.escape.de>
 --
 -- Permission to use, copy, modify, and distribute this software for any
@@ -19,7 +20,6 @@ import Control.Arrow (first)
 import Control.Exception (bracket)
 import Control.Monad (forM_)
 import Data.List (isSuffixOf, nub, sort)
-import Data.Map (Map)
 import Data.Maybe
 import Database.GhcPkg
 import Database.Sqlports
@@ -34,6 +34,8 @@ import System.FilePath
 import qualified Data.Map as Map
 import qualified Distribution.Hackage.DB as DB
 import qualified Distribution.PackageDescription as PD
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
 
 data Flag = All | Dump | Pkgs deriving (Eq, Show)
 
@@ -73,13 +75,10 @@ packageList fs = do
 readHackage :: IO DB.HackageDB
 readHackage = DB.hackageTarball >>= DB.readTarball Nothing
 
-ppkgpath :: Pkg -> String
-ppkgpath = Database.Sqlports.pkgpath
-
 ipkgpath :: InstalledPackageInfo -> String
 ipkgpath = const "TODO: ipkgpath"
 
-dumpWith :: (Connection -> IO (Map String Pkg)) -> IO ()
+dumpWith :: (Connection -> IO PkgMap) -> IO ()
 dumpWith f = do
 	ps <- bracket open close f
 	putStr $ unlines $ map show $ Map.elems ps
@@ -91,7 +90,7 @@ dumpPkgs all = do
 	putStr $ unlines $ map show $ ghcpkgs
 
 processFile ::    InstalledPackages
-	       -> Map String Pkg
+	       -> PkgMap
 	       -> DB.HackageDB
 	       -> String
 	       -> IO ()
@@ -103,15 +102,16 @@ processFile ipkgs hpkgs hdb f = do
     else findPkg ipkgs hpkgs hdb f
 
 findPkg ::    InstalledPackages
-	   -> Map String Pkg
+	   -> PkgMap
 	   -> DB.HackageDB
 	   -> String
 	   -> IO ()
 findPkg ipkgs hpkgs hdb p = do
   print p
   let pkgs' = bydistname $ Map.elems hpkgs
-      printJust x f = maybe (pure ()) (putStrLn . f) x
-  printJust (Map.lookup p pkgs') $ \pkg ->
+      printJust = printJust' putStrLn
+      printJust' printer x f = maybe (pure ()) (printer . f) x
+  printJust' Text.putStrLn  (Map.lookup (Text.pack p) pkgs') $ \pkg ->
     "sqlports:\t" <> (fullpkgpath pkg) <> " (" <> distVersion pkg <> ")"
   printJust (Map.lookup (mkPackageName p) ipkgs) $ \pkg ->
     "ghc-pkg:\t" <> (ipkgpath pkg) <>
@@ -137,11 +137,21 @@ printHackageDeps = do
   hdb <- readHackage
   systemPkgs <- Map.keysSet <$> bundledPackages
   let pkgs = bydistname $ Map.elems hpkgs
-  forM_ (Map.assocs pkgs) $ \(pname, hpkg) -> do
+      -- The ??? below happen when pointing to non-existent ports.
+      -- They aren't necessarily errors because the port may not
+      -- be built with flags that require such a dependency.
+      packetizeName :: String -> String
+      packetizeName p =
+        let p' = Text.pack p
+        in Text.unpack $ maybe ("???" <> p') fullpkgpath
+           $ Map.lookup p' pkgs
+  forM_ (Map.assocs pkgs) $ \(pnamet, hpkg) -> do
       let hv = mkVersion'
                $ fromMaybe (error $ "Can't determine hackage version of " <> pname)
                $ hackageVersion hpkg
-      putStrLn $ fullpkgpath hpkg <> " " <> pname <> "-" <> prettyShow hv
+          pname = Text.unpack pnamet
+      putStrLn $ Text.unpack (fullpkgpath hpkg) <>
+                 " " <> pname <> "-" <> prettyShow hv
       case Map.lookup (mkPackageName pname) hdb of
         Nothing -> putStrLn $ "Not in hackage " <> pname
         Just pkgData ->
@@ -153,10 +163,6 @@ printHackageDeps = do
               let frags =
                     filter (not . null . snd) $  -- Bug in dumpCabalDeps
                     dumpDepsFromPD systemPkgs pkg
-                  -- The ??? below happen when pointing to non-existent ports.
-                  -- They aren't necessarily errors because the port may not
-                  -- be built in with flags that require such a dependency.
-                  packetizeName p = maybe ("???" <> p) fullpkgpath $ Map.lookup p pkgs
                   depListing = unlines $ mconcat [
                     what <> "\t\t= \\" :
                     [ "\t\t\t" <> hp <> concat rs <> " \\"
@@ -166,7 +172,7 @@ printHackageDeps = do
                     ]
               if (not $ null depListing)
                 then do
-                   let name = "/usr/ports" </> pkgpath hpkg </> "Makefile"
+                   let name = "/usr/ports" </> Text.unpack (pkgpath hpkg) </> "Makefile"
                    appendFile name depListing
                    putStrLn $ "Appended to " <> name
                 else putStrLn "Nothing to do"
