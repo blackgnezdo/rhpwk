@@ -18,16 +18,16 @@ module Database.GhcPkg
   , installedpkgs
   ) where
 
-import Data.List
-import Data.Map (Map)
+import Data.Map.Strict (Map)
 import Data.Maybe (listToMaybe)
-import qualified Data.Map as Map
 import Distribution.InstalledPackageInfo
 import Distribution.Package
 import Distribution.Simple.Utils
-import System.Directory
-import System.FilePath
+import System.Directory (getDirectoryContents)
+import System.FilePath ((</>), isExtensionOf, takeDirectory)
 import System.Process (readProcess)
+
+import qualified Data.Map.Strict as Map
 
 type InstalledPackages = Map PackageName InstalledPackageInfo
 
@@ -38,13 +38,15 @@ installedpkgs = do
   top <- listToMaybe <$> confDirPathsInGhc
   let path = maybe (error "pkg_info -L ghc failed") takeDirectory top
   fs <- getDirectoryContents path
-  parseConfigFiles $ map (path </>) $ filter (".conf" `isSuffixOf`) fs
+  parseConfigFiles $ (path </>) <$> filterConfigFiles fs
+
+filterConfigFiles = filter (isExtensionOf ".conf")
 
 parseConfigFiles :: [FilePath] -> IO InstalledPackages
 parseConfigFiles confs = do
   pkgs <- mapM (fmap parsePkgInfo . readUTF8File) confs
-  return $ Map.fromList [ (pkgName $ sourcePackageId p, p)
-                        | p <- pkgs ]
+  return $! Map.fromList [ (pkgName $ sourcePackageId p, p)
+                         | p <- pkgs ]
   where parsePkgInfo f =
           case parseInstalledPackageInfo f of
             ParseOk _ ps  -> ps
@@ -58,6 +60,5 @@ confDirPathsInGhc =
 -- | Fetches all InstalledPackagesInfos bundled into the ghc package
 -- currently installed on the system.
 bundledPackages :: IO InstalledPackages
-bundledPackages = do
-  fs <- filter (".conf" `isSuffixOf`) <$> confDirPathsInGhc
-  parseConfigFiles fs
+bundledPackages =
+  filterConfigFiles <$> confDirPathsInGhc >>= parseConfigFiles
