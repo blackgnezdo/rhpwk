@@ -72,11 +72,11 @@ dumpCabalDeps systemPkgs f = do
     forM_ ps $ \(p, rs) -> putStrLn $ "\t" <> p <> concat rs
 
 dumpDepsFromPD :: Set PackageName -> PackageDescription -> [(String, [(String, [String])])]
-dumpDepsFromPD systemPkgs p = do
+dumpDepsFromPD systemPkgs p =
   let lib = library p
       execs = executables p
       hasLib = isJust lib
-      hasExecs = not $ null $ execs
+      hasExecs = not $ null execs
       libDeps = targetBuildDepends $ libBuildInfo $ fromJust lib
       execDeps = concatMap (targetBuildDepends . buildInfo) execs
       allBuilds = allBuildInfo p :: [BuildInfo]

@@ -89,7 +89,7 @@ dumpPkgs :: Bool -> IO ()
 dumpPkgs all = do
   ipkgs <- installedpkgs
   let ghcpkgs = [p | p <- Map.elems ipkgs, all || ipkgpath p == "lang/ghc"]
-  putStr $ unlines $ map show $ ghcpkgs
+  putStr $ unlines $ map show ghcpkgs
 
 processFile ::
   InstalledPackages ->
@@ -97,7 +97,7 @@ processFile ::
   DB.HackageDB ->
   String ->
   IO ()
-processFile ipkgs hpkgs hdb f = do
+processFile ipkgs hpkgs hdb f =
   if ".cabal" `isSuffixOf` f
     then do
       systemPkgs <- Map.keysSet <$> bundledPackages
@@ -116,11 +116,11 @@ findPkg ipkgs hpkgs hdb p = do
       printJust = printJust' putStrLn
       printJust' printer x f = maybe (pure ()) (printer . f) x
   printJust' Text.putStrLn (Map.lookup (Text.pack p) pkgs') $ \pkg ->
-    "sqlports:\t" <> (fullpkgpath pkg) <> " (" <> distVersion pkg <> ")"
+    "sqlports:\t" <> fullpkgpath pkg <> " (" <> distVersion pkg <> ")"
   printJust (Map.lookup (mkPackageName p) ipkgs) $ \pkg ->
-    "ghc-pkg:\t" <> (ipkgpath pkg)
+    "ghc-pkg:\t" <> ipkgpath pkg
       <> " ("
-      <> (prettyShow $ pkgVersion $ sourcePackageId pkg)
+      <> prettyShow (pkgVersion $ sourcePackageId pkg)
       <> ")"
   printJust (Map.lookup (mkPackageName p) hdb) $ \pkg ->
     "hackage:\t" <> latestFromPackageHackage pkg
@@ -185,7 +185,7 @@ printHackageDeps = do
                             ]
                         | (what, ps) <- frags
                       ]
-            if (not $ null depListing)
+            if not $ null depListing
               then do
                 let name = "/usr/ports" </> Text.unpack (pkgpath hpkg) </> "Makefile"
                 appendFile name depListing

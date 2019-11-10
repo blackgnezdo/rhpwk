@@ -158,7 +158,7 @@ getpkgs constr c = do
            \  type"
   execute stmt []
   rows <- fetchAllRows' stmt
-  let rowss = groupBy ((==) `on` (take 3)) rows
+  let rowss = groupBy ((==) `on` take 3) rows
   let pkgs = map toPkg rowss
   return $! Map.fromList [(fullpkgpath p, p) | p <- pkgs]
   where
@@ -172,7 +172,7 @@ getpkgs constr c = do
           deps = collectdeps (drop 5 <$> rs)
         }
     collectdeps rs =
-      let rs' = filter (all (/= SqlNull)) rs
+      let rs' = filter (notElem SqlNull) rs
           toDep [d, s, t] =
             Dependency (fromSql d) (fromSql s) (dependsType (fromSql t))
        in toDep <$> rs'
