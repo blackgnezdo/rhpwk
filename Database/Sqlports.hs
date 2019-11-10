@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- Copyright (c) 2010, 2012 Matthias Kilian <kili@outback.escape.de>
@@ -55,7 +56,7 @@ data GPkg d
         distname :: Maybe Text,
         pkgname :: Text,
         multi :: Bool,
-        deps :: [d]
+        deps :: [Dependency d]
       }
   deriving (Show, Eq, Generic, Functor)
 
@@ -63,9 +64,9 @@ instance Out d => Out (GPkg d)
 
 type GPkgMap p = Map Text p -- by fullpkgpath
 
-type Pkg = GPkg Dependency
+type Pkg = GPkg Text
 
-type PkgMap = GPkgMap (GPkg Dependency)
+type PkgMap = GPkgMap (GPkg Text)
 
 data DependsType = BuildDepends | LibDepends | RunDepends | RegressDepends
   deriving (Show, Eq, Generic)
@@ -77,15 +78,15 @@ instance Out DependsType
 --    xfce4-icon-theme-*|tango-icon-theme-*|gnome-icon-theme-*
 -- 3: parse pkgspecs and transform them into some usable data type
 
-data Dependency
+data Dependency d
   = Dependency
-      { dependspath :: Text,
+      { dependspath :: d,
         pkgspec :: Text,
         dtype :: DependsType
       }
-  deriving (Show, Eq, Generic)
+  deriving (Show, Eq, Generic, Functor)
 
-instance Out Dependency
+instance Out d => Out (Dependency d)
 
 dependsType :: Text -> DependsType
 dependsType "B" = BuildDepends
@@ -186,11 +187,11 @@ getpkgs constr c = do
           multi = fromSql m,
           deps = collectdeps (drop 5 <$> rs)
         }
-    collectdeps :: [[SqlValue]] -> [Dependency]
+    collectdeps :: [[SqlValue]] -> [Dependency Text]
     collectdeps rs =
       let rs' = filter (notElem SqlNull) rs
           toDep [d, s, t] =
-            Dependency (fromSql d) (fromSql s) (dependsType (fromSql t))
+            Dependency (fromSql d :: Text) (fromSql s) (dependsType (fromSql t))
        in toDep <$> rs'
 
 -- Given a map of fullpkgnames to Pkgs, remove all dependencies
@@ -207,7 +208,7 @@ pkgClosure ps = zapNonHsDeps <$> ps
   where
     zapNonHsDeps :: Pkg -> Pkg
     zapNonHsDeps p = p {deps = filter isHsDep $ deps p}
-    isHsDep :: Dependency -> Bool
+    isHsDep :: Dependency Text -> Bool
     isHsDep d = dependspath d `Map.member` ps
 
 -- Build a map from a list of Pkgs where the keys are distnames (but
@@ -250,6 +251,8 @@ hackageVersion p =
 
 type ResolvedPkg = Fix GPkg
 
+instance Out ResolvedPkg
+
 type ResolvedPkgMap = GPkgMap ResolvedPkg
 
 -- | Replaces Dependency with ResolvedPkg in the given PkgMap.
@@ -258,8 +261,7 @@ resolvePkgMap m = resolve <$> m
   where
     resolve :: Pkg -> ResolvedPkg
     resolve = ana (fmap forceLookup)
-    forceLookup :: Dependency -> Pkg
-    forceLookup p = fromMaybe e $ Map.lookup n m
+    forceLookup :: Text -> Pkg
+    forceLookup n = fromMaybe e $ Map.lookup n m
       where
         e = error $ "Can't resolve " <> Text.unpack n
-        n = dependspath p
