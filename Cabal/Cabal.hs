@@ -23,7 +23,7 @@ import Data.Maybe (fromJust, isJust)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Distribution.Compiler (AbiTag(..), buildCompilerId, unknownCompilerInfo)
-import Distribution.Package (Dependency(..))
+import Distribution.Package (PackageName, Dependency(..))
 import Distribution.PackageDescription
   ( BuildInfo(..)
   , GenericPackageDescription
@@ -32,7 +32,6 @@ import Distribution.PackageDescription
   , buildInfo
   , libBuildInfo
   )
-import Distribution.Package (PackageName)
 import Distribution.PackageDescription.Configuration (finalizePD)
 import Distribution.PackageDescription.Parsec (readGenericPackageDescription)
 import Distribution.Pretty (prettyShow)
