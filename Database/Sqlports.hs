@@ -1,5 +1,7 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 -- Copyright (c) 2010, 2012 Matthias Kilian <kili@outback.escape.de>
 --
 -- Permission to use, copy, modify, and distribute this software for any
@@ -17,7 +19,8 @@
 module Database.Sqlports
   ( Connection,
     Dependency (..),
-    Pkg (..),
+    GPkg (..),
+    Pkg,
     PkgMap,
     close,
     hspkgs,
@@ -30,10 +33,11 @@ module Database.Sqlports
 where
 
 import Data.Char (isDigit)
+import Data.Fix (Fix (..), ana)
 import Data.Function (on)
 import Data.List
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Maybe
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -42,28 +46,33 @@ import Database.HDBC
 import Database.HDBC.Sqlite3
 import System.Process (readProcess)
 import Text.ParserCombinators.ReadP (readP_to_S)
-import Text.PrettyPrint.GenericPretty(Generic, Out)
+import Text.PrettyPrint.GenericPretty (Generic, Out)
 
-data Pkg
-  = Pkg
+data GPkg d
+  = GPkg
       { fullpkgpath :: Text,
         pkgpath :: Text,
         distname :: Maybe Text,
         pkgname :: Text,
         multi :: Bool,
-        deps :: [Dependency]
+        deps :: [d]
       }
-  deriving (Show, Eq, Generic)
-instance Out Pkg
+  deriving (Show, Eq, Generic, Functor)
 
-type PkgMap = Map Text Pkg -- by fullpkgpath
+instance Out d => Out (GPkg d)
+
+type GPkgMap p = Map Text p -- by fullpkgpath
+
+type Pkg = GPkg Dependency
+
+type PkgMap = GPkgMap (GPkg Dependency)
 
 data DependsType = BuildDepends | LibDepends | RunDepends | RegressDepends
   deriving (Show, Eq, Generic)
+
 instance Out DependsType
 
 -- Todo:
--- 1: let Dependency refer to a real Pkg object (recursively)
 -- 2: handle dependency alternatives like
 --    xfce4-icon-theme-*|tango-icon-theme-*|gnome-icon-theme-*
 -- 3: parse pkgspecs and transform them into some usable data type
@@ -75,6 +84,7 @@ data Dependency
         dtype :: DependsType
       }
   deriving (Show, Eq, Generic)
+
 instance Out Dependency
 
 dependsType :: Text -> DependsType
@@ -168,7 +178,7 @@ getpkgs constr c = do
   return $! Map.fromList [(fullpkgpath p, p) | p <- pkgs]
   where
     toPkg rs@((f : p : d : n : m : _) : _) =
-      Pkg
+      GPkg
         { fullpkgpath = fromSql f,
           pkgpath = fromSql p,
           distname = fromSql d,
@@ -193,7 +203,7 @@ getpkgs constr c = do
 -- function won't be of any use.
 --
 pkgClosure :: PkgMap -> PkgMap
-pkgClosure ps = Map.map zapNonHsDeps ps
+pkgClosure ps = zapNonHsDeps <$> ps
   where
     zapNonHsDeps :: Pkg -> Pkg
     zapNonHsDeps p = p {deps = filter isHsDep $ deps p}
@@ -237,3 +247,19 @@ hackageVersion p =
    in case pickFullParse $ readP_to_S parseVersion $ Text.unpack $ distVersion p of
         [(v, "")] -> Just v
         _ -> Nothing
+
+type ResolvedPkg = Fix GPkg
+
+type ResolvedPkgMap = GPkgMap ResolvedPkg
+
+-- | Replaces Dependency with ResolvedPkg in the given PkgMap.
+resolvePkgMap :: PkgMap -> ResolvedPkgMap
+resolvePkgMap m = resolve <$> m
+  where
+    resolve :: Pkg -> ResolvedPkg
+    resolve = ana (fmap forceLookup)
+    forceLookup :: Dependency -> Pkg
+    forceLookup p = fromMaybe e $ Map.lookup n m
+      where
+        e = error $ "Can't resolve " <> Text.unpack n
+        n = dependspath p
