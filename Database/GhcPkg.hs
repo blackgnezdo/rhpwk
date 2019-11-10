@@ -13,12 +13,14 @@
 -- OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 module Database.GhcPkg
-  ( InstalledPackages
-  , bundledPackages
-  , installedpkgs
-  ) where
+  ( InstalledPackages,
+    bundledPackages,
+    installedpkgs,
+  )
+where
 
 import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 import Data.Maybe (listToMaybe)
 import Distribution.InstalledPackageInfo
 import Distribution.Package
@@ -26,8 +28,6 @@ import Distribution.Simple.Utils
 import System.Directory (getDirectoryContents)
 import System.FilePath ((</>), isExtensionOf, takeDirectory)
 import System.Process (readProcess)
-
-import qualified Data.Map.Strict as Map
 
 type InstalledPackages = Map PackageName InstalledPackageInfo
 
@@ -45,17 +45,21 @@ filterConfigFiles = filter (isExtensionOf ".conf")
 parseConfigFiles :: [FilePath] -> IO InstalledPackages
 parseConfigFiles confs = do
   pkgs <- mapM (fmap parsePkgInfo . readUTF8File) confs
-  return $! Map.fromList [ (pkgName $ sourcePackageId p, p)
-                         | p <- pkgs ]
-  where parsePkgInfo f =
-          case parseInstalledPackageInfo f of
-            ParseOk _ ps  -> ps
-            x -> error $ "Unable to parse " ++ show x
+  return
+    $! Map.fromList
+      [ (pkgName $ sourcePackageId p, p)
+        | p <- pkgs
+      ]
+  where
+    parsePkgInfo f =
+      case parseInstalledPackageInfo f of
+        ParseOk _ ps -> ps
+        x -> error $ "Unable to parse " ++ show x
 
 confDirPathsInGhc :: IO [FilePath]
 confDirPathsInGhc =
   filter ("/package.conf.d/" `isInfixOf`) . lines
-  <$> readProcess "pkg_info" ["-L", "ghc"] ""
+    <$> readProcess "pkg_info" ["-L", "ghc"] ""
 
 -- | Fetches all InstalledPackagesInfos bundled into the ghc package
 -- currently installed on the system.

@@ -12,25 +12,26 @@
 -- ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 -- OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-module Cabal.Cabal (
-    dumpCabalDeps
-  , dumpDepsFromPD
-  , refineDescription
-) where
+module Cabal.Cabal
+  ( dumpCabalDeps,
+    dumpDepsFromPD,
+    refineDescription,
+  )
+where
 
 import Control.Monad (forM_)
 import Data.Maybe (fromJust, isJust)
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Distribution.Compiler (AbiTag(..), buildCompilerId, unknownCompilerInfo)
-import Distribution.Package (PackageName, Dependency(..))
+import Distribution.Compiler (AbiTag (..), buildCompilerId, unknownCompilerInfo)
+import Distribution.Package (Dependency (..), PackageName)
 import Distribution.PackageDescription
-  ( BuildInfo(..)
-  , GenericPackageDescription
-  , PackageDescription(..)
-  , allBuildInfo
-  , buildInfo
-  , libBuildInfo
+  ( BuildInfo (..),
+    GenericPackageDescription,
+    PackageDescription (..),
+    allBuildInfo,
+    buildInfo,
+    libBuildInfo,
   )
 import Distribution.PackageDescription.Configuration (finalizePD)
 import Distribution.PackageDescription.Parsec (readGenericPackageDescription)
@@ -39,17 +40,17 @@ import Distribution.Simple.BuildToolDepends (getAllToolDependencies)
 import Distribution.System (buildPlatform)
 import Distribution.Types.ComponentRequestedSpec (defaultComponentRequestedSpec)
 import Distribution.Types.Dependency (depPkgName)
-import Distribution.Types.ExeDependency (ExeDependency(..))
+import Distribution.Types.ExeDependency (ExeDependency (..))
 import Distribution.Types.PackageName (unPackageName)
 import Distribution.Verbosity (silent)
 import Distribution.Version
-  ( Bound(..)
-  , LowerBound(..)
-  , UpperBound(..)
-  , VersionInterval
-  , VersionRange
-  , asVersionIntervals
-  , version0
+  ( Bound (..),
+    LowerBound (..),
+    UpperBound (..),
+    VersionInterval,
+    VersionRange,
+    asVersionIntervals,
+    version0,
   )
 
 refineDescription :: GenericPackageDescription -> Either [Dependency] PackageDescription
@@ -59,7 +60,7 @@ refineDescription gp =
       plat = buildPlatform
       compiler = unknownCompilerInfo buildCompilerId NoAbiTag
       extraDeps = []
-  in fst <$> finalizePD mempty spec checkDep plat compiler extraDeps gp
+   in fst <$> finalizePD mempty spec checkDep plat compiler extraDeps gp
 
 dumpCabalDeps :: Set PackageName -> FilePath -> IO ()
 dumpCabalDeps systemPkgs f = do
@@ -69,7 +70,6 @@ dumpCabalDeps systemPkgs f = do
   forM_ frags $ \(what, ps) -> do
     putStrLn $ what <> "="
     forM_ ps $ \(p, rs) -> putStrLn $ "\t" <> p <> concat rs
-
 
 dumpDepsFromPD :: Set PackageName -> PackageDescription -> [(String, [(String, [String])])]
 dumpDepsFromPD systemPkgs p = do
@@ -82,19 +82,21 @@ dumpDepsFromPD systemPkgs p = do
       allBuilds = allBuildInfo p :: [BuildInfo]
       buildDeps = concatMap (getAllToolDependencies p) allBuilds
       pared ds = [d | d <- ds, not $ depPkgName d `Set.member` systemPkgs]
-    in concat
-       [ [("BUILD_DEPENDS", printExeDep <$> buildDeps)
-         | not $ null buildDeps
-         ]
-       , [( if hasLib then "RUN_DEPENDS-main" else "RUN_DEPENDS"
-          , printDep <$> pared execDeps)
-         | hasExecs
-         ]
-       , [( if hasExecs then "RUN_DEPENDS-lib" else "RUN_DEPENDS"
-          , printDep <$> pared libDeps)
-         | hasLib
-         ]
-       ]
+   in concat
+        [ [ ("BUILD_DEPENDS", printExeDep <$> buildDeps)
+            | not $ null buildDeps
+          ],
+          [ ( if hasLib then "RUN_DEPENDS-main" else "RUN_DEPENDS",
+              printDep <$> pared execDeps
+            )
+            | hasExecs
+          ],
+          [ ( if hasExecs then "RUN_DEPENDS-lib" else "RUN_DEPENDS",
+              printDep <$> pared libDeps
+            )
+            | hasLib
+          ]
+        ]
 
 printExeDep :: ExeDependency -> (String, [String])
 printExeDep (ExeDependency pkg _ vs) = (unPackageName pkg, printVR vs)
@@ -104,20 +106,19 @@ printVR = map printVI . asVersionIntervals
 
 printDep :: Dependency -> (String, [String])
 printDep (Dependency pkg vr) =
-	(unPackageName pkg, map printVI $ asVersionIntervals vr)
+  (unPackageName pkg, map printVI $ asVersionIntervals vr)
 
 printVI :: VersionInterval -> String
 printVI (LowerBound lv InclusiveBound, NoUpperBound)
   | lv == version0 = ""
-printVI (LowerBound lv lb, NoUpperBound) = printB '>' lb ++ prettyShow  lv
+printVI (LowerBound lv lb, NoUpperBound) = printB '>' lb ++ prettyShow lv
 printVI (LowerBound lv InclusiveBound, UpperBound uv InclusiveBound)
-	| lv == uv = '=' : prettyShow lv
+  | lv == uv = '=' : prettyShow lv
 printVI (LowerBound lv InclusiveBound, UpperBound uv ub)
   | lv == version0 = printB '<' ub ++ prettyShow uv
 printVI (LowerBound lv lb, UpperBound uv ub) =
-	printB '>' lb ++ prettyShow lv ++ "," ++ printB '<' ub ++ prettyShow uv
+  printB '>' lb ++ prettyShow lv ++ "," ++ printB '<' ub ++ prettyShow uv
 
 printB :: Char -> Bound -> String
 printB op InclusiveBound = op : "="
 printB op ExclusiveBound = [op]
- 
