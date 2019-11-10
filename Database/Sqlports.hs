@@ -238,11 +238,11 @@ splitByVersion t =
     versionChar c = isDigit c
 
 -- Extract the version number from a Pkgs distname.
-distVersion :: Pkg -> Text
-distVersion = snd . splitByVersion . fullpkgpath
+distVersion :: GPkg a -> Text
+distVersion = snd . splitByVersion . pkgname
 
 -- | Returns the hackage version for the given package if possible.
-hackageVersion :: Pkg -> Maybe Version
+hackageVersion :: GPkg a -> Maybe Version
 hackageVersion p =
   let pickFullParse = filter ((== "") . snd)
    in case pickFullParse $ readP_to_S parseVersion $ Text.unpack $ distVersion p of
