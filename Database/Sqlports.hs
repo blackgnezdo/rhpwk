@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-
+{-# LANGUAGE DeriveGeneric #-}
 -- Copyright (c) 2010, 2012 Matthias Kilian <kili@outback.escape.de>
 --
 -- Permission to use, copy, modify, and distribute this software for any
@@ -42,6 +42,7 @@ import Database.HDBC
 import Database.HDBC.Sqlite3
 import System.Process (readProcess)
 import Text.ParserCombinators.ReadP (readP_to_S)
+import Text.PrettyPrint.GenericPretty(Generic, Out)
 
 data Pkg
   = Pkg
@@ -52,12 +53,14 @@ data Pkg
         multi :: Bool,
         deps :: [Dependency]
       }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic)
+instance Out Pkg
 
 type PkgMap = Map Text Pkg -- by fullpkgpath
 
 data DependsType = BuildDepends | LibDepends | RunDepends | RegressDepends
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic)
+instance Out DependsType
 
 -- Todo:
 -- 1: let Dependency refer to a real Pkg object (recursively)
@@ -71,7 +74,8 @@ data Dependency
         pkgspec :: Text,
         dtype :: DependsType
       }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic)
+instance Out Dependency
 
 dependsType :: Text -> DependsType
 dependsType "B" = BuildDepends
@@ -172,6 +176,7 @@ getpkgs constr c = do
           multi = fromSql m,
           deps = collectdeps (drop 5 <$> rs)
         }
+    collectdeps :: [[SqlValue]] -> [Dependency]
     collectdeps rs =
       let rs' = filter (notElem SqlNull) rs
           toDep [d, s, t] =
