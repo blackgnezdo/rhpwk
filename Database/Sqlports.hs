@@ -33,6 +33,7 @@ module Database.Sqlports
   )
 where
 
+import Cabal.Cabal
 import Data.Char (isDigit)
 import Data.Fix (Fix (..), ana)
 import Data.Function (on)
@@ -47,7 +48,7 @@ import Database.HDBC
 import Database.HDBC.Sqlite3
 import System.Process (readProcess)
 import Text.ParserCombinators.ReadP (readP_to_S)
-import Text.PrettyPrint.GenericPretty (Generic, Out)
+import Text.PrettyPrint.GenericPretty (Generic, Out (..))
 
 data GPkg d
   = GPkg
@@ -76,12 +77,11 @@ instance Out DependsType
 -- Todo:
 -- 2: handle dependency alternatives like
 --    xfce4-icon-theme-*|tango-icon-theme-*|gnome-icon-theme-*
--- 3: parse pkgspecs and transform them into some usable data type
 
 data Dependency d
   = Dependency
       { dependspath :: d,
-        pkgspec :: Text,
+        pkgspec :: PkgSpec,
         dtype :: DependsType
       }
   deriving (Show, Eq, Generic, Functor)
@@ -175,8 +175,7 @@ getpkgs constr c = do
   execute stmt []
   rows <- fetchAllRows' stmt
   let rowss = groupBy ((==) `on` take 3) rows
-  let pkgs = map toPkg rowss
-  return $! Map.fromList [(fullpkgpath p, p) | p <- pkgs]
+  return $! Map.fromList [(fullpkgpath p, p) | p <- toPkg <$> rowss]
   where
     toPkg rs@((f : p : d : n : m : _) : _) =
       GPkg
@@ -191,7 +190,12 @@ getpkgs constr c = do
     collectdeps rs =
       let rs' = filter (notElem SqlNull) rs
           toDep [d, s, t] =
-            Dependency (fromSql d :: Text) (fromSql s) (dependsType (fromSql t))
+            Dependency
+              (fromSql d :: Text)
+              (fromMaybe err $ parsePkgSpec $ fromSql s)
+              (dependsType $ fromSql t)
+            where
+              err = error $ "Unable to parse dependency " <> show s
        in toDep <$> rs'
 
 -- Given a map of fullpkgnames to Pkgs, remove all dependencies
@@ -245,7 +249,8 @@ distVersion = snd . splitByVersion . pkgname
 hackageVersion :: GPkg a -> Maybe Version
 hackageVersion p =
   let pickFullParse = filter ((== "") . snd)
-   in case pickFullParse $ readP_to_S parseVersion $ Text.unpack $ distVersion p of
+      parses = readP_to_S parseVersion $ Text.unpack $ distVersion p
+   in case pickFullParse parses of
         [(v, "")] -> Just v
         _ -> Nothing
 

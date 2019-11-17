@@ -16,6 +16,8 @@ module Cabal.Cabal
   ( dumpCabalDeps,
     dumpDepsFromPD,
     refineDescription,
+    PkgSpec,
+    parsePkgSpec,
   )
 where
 
@@ -35,6 +37,7 @@ import Distribution.PackageDescription
   )
 import Distribution.PackageDescription.Configuration (finalizePD)
 import Distribution.PackageDescription.Parsec (readGenericPackageDescription)
+import Distribution.Parsec.Class (simpleParsec)
 import Distribution.Pretty (prettyShow)
 import Distribution.Simple.BuildToolDepends (getAllToolDependencies)
 import Distribution.System (buildPlatform)
@@ -49,9 +52,35 @@ import Distribution.Version
     UpperBound (..),
     VersionInterval,
     VersionRange,
+    anyVersion,
     asVersionIntervals,
     version0,
   )
+import Text.PrettyPrint (text)
+import Text.PrettyPrint.GenericPretty (Out (..))
+
+newtype PkgSpec = PkgSpec {unPkgSpec :: VersionRange} deriving (Show, Eq)
+
+instance Out PkgSpec where
+
+  docPrec _ = doc
+
+  doc = text . show . unPkgSpec
+
+parsePkgSpec :: String -> Maybe PkgSpec
+parsePkgSpec "" = Just $ PkgSpec anyVersion
+parsePkgSpec pkgSpecStr = PkgSpec <$> (cleaner pkgSpecStr >>= simpleParsec)
+  where
+    cleaner :: String -> Maybe String
+    cleaner ('S' : 'T' : 'E' : 'M' : '-' : version) =
+      Just $ concatMap replaceComma version
+    cleaner _ = Nothing
+    -- OpenBSD packages-specs are separated by comma whereas
+    -- Cabal's by &&. Not using a true parser here because it
+    -- seems like a simple enough case and the data is supposedly
+    -- pre-validated by sqlports.
+    replaceComma ',' = "&&"
+    replaceComma x = [x]
 
 refineDescription :: GenericPackageDescription -> Either [Dependency] PackageDescription
 refineDescription gp =
