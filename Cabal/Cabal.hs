@@ -59,13 +59,18 @@ import Distribution.Version
 import Text.PrettyPrint (text)
 import Text.PrettyPrint.GenericPretty (Out (..))
 
-newtype PkgSpec = PkgSpec {unPkgSpec :: VersionRange} deriving (Show, Eq)
+newtype PkgSpec = PkgSpec {unPkgSpec :: VersionRange} deriving (Eq)
+
+instance Show PkgSpec where
+  -- OpenBSD pkgSpec only supports a single VersionInterval.
+  -- Hence concat below should not produce malformed values.
+  showsPrec _ s = (concat (printVR (unPkgSpec s)) <>)
 
 instance Out PkgSpec where
 
   docPrec _ = doc
 
-  doc = text . show . unPkgSpec
+  doc = text . show
 
 parsePkgSpec :: String -> Maybe PkgSpec
 parsePkgSpec "" = Just $ PkgSpec anyVersion
