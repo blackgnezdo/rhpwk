@@ -113,16 +113,17 @@ findPkg ::
 findPkg ipkgs hpkgs hdb p = do
   print p
   let pkgs' = bydistname $ Map.elems hpkgs
+      pkgName = mkPackageName p
       printJust = printJust' putStrLn
       printJust' printer x f = maybe (pure ()) (printer . f) x
-  printJust' Text.putStrLn (Map.lookup (Text.pack p) pkgs') $ \pkg ->
+  printJust' Text.putStrLn (Map.lookup pkgName pkgs') $ \pkg ->
     "sqlports:\t" <> fullpkgpath pkg <> " (" <> distVersion pkg <> ")"
-  printJust (Map.lookup (mkPackageName p) ipkgs) $ \pkg ->
+  printJust (Map.lookup pkgName ipkgs) $ \pkg ->
     "ghc-pkg:\t" <> ipkgpath pkg
       <> " ("
       <> prettyShow (pkgVersion $ sourcePackageId pkg)
       <> ")"
-  printJust (Map.lookup (mkPackageName p) hdb) $ \pkg ->
+  printJust (Map.lookup pkgName hdb) $ \pkg ->
     "hackage:\t" <> latestFromPackageHackage pkg
 
 latestFromPackageHackage :: DB.PackageData -> String
@@ -150,44 +151,42 @@ printHackageDeps = do
       -- be built with flags that require such a dependency.
       packetizeName :: String -> String
       packetizeName p =
-        let p' = Text.pack p
-         in Text.unpack $ maybe ("???" <> p') fullpkgpath $
+        let p' = mkPackageName p
+         in Text.unpack $ maybe ("???" <> Text.pack p) fullpkgpath $
               Map.lookup p' pkgs
-  forM_ (Map.assocs pkgs) $ \(pnamet, hpkg) -> do
+      crossCheck = Map.intersectionWith (,) pkgs hdb
+  forM_ (Map.assocs crossCheck) $ \(pname, (hpkg, pkgData)) -> do
     let hv =
           mkVersion'
-            $ fromMaybe (error $ "Can't determine hackage version of " <> pname)
+            $ fromMaybe (error $ "Can't determine hackage version of " <> spname)
             $ hackageVersion hpkg
-        pname = Text.unpack pnamet
+        spname = unPackageName pname
     putStrLn $
       Text.unpack (fullpkgpath hpkg)
         <> " "
-        <> pname
+        <> spname
         <> "-"
         <> prettyShow hv
-    case Map.lookup (mkPackageName pname) hdb of
-      Nothing -> putStrLn $ "Not in hackage " <> pname
-      Just pkgData ->
-        case Map.lookup hv pkgData of
-          Nothing -> putStrLn $ "No version data " <> prettyShow hv
-          Just verData -> do
-            let pkgPd = DB.cabalFile verData
-                pkg = either (error . show) id $ refineDescription pkgPd
-            let frags =
-                  filter (not . null . snd) $ -- Bug in dumpCabalDeps
-                    dumpDepsFromPD systemPkgs pkg
-                depListing =
-                  unlines $
-                    mconcat
-                      [ what <> "\t\t= \\"
-                          : [ "\t\t\t" <> hp <> concat rs <> " \\"
-                              | (hp, rs) <- sort (first packetizeName <$> nub ps)
-                            ]
-                        | (what, ps) <- frags
-                      ]
-            if not $ null depListing
-              then do
-                let name = "/usr/ports" </> Text.unpack (pkgpath hpkg) </> "Makefile"
-                appendFile name depListing
-                putStrLn $ "Appended to " <> name
-              else putStrLn "Nothing to do"
+    case Map.lookup hv pkgData of
+      Nothing -> putStrLn $ "No version data " <> prettyShow hv
+      Just verData -> do
+        let pkgPd = DB.cabalFile verData
+            pkg = either (error . show) id $ refineDescription pkgPd
+        let frags =
+              filter (not . null . snd) $ -- Bug in dumpCabalDeps
+                dumpDepsFromPD systemPkgs pkg
+            depListing =
+              unlines $
+                mconcat
+                  [ what <> "\t\t= \\"
+                      : [ "\t\t\t" <> hp <> concat rs <> " \\"
+                          | (hp, rs) <- sort (first packetizeName <$> nub ps)
+                        ]
+                    | (what, ps) <- frags
+                  ]
+        if not $ null depListing
+          then do
+            let name = "/usr/ports" </> Text.unpack (pkgpath hpkg) </> "Makefile"
+            appendFile name depListing
+            putStrLn $ "Appended to " <> name
+          else putStrLn "Nothing to do"

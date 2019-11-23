@@ -46,6 +46,7 @@ import qualified Data.Text as Text
 import Data.Version (Version, parseVersion)
 import Database.HDBC
 import Database.HDBC.Sqlite3
+import Distribution.Types.PackageName (PackageName, mkPackageName)
 import System.Process (readProcess)
 import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.PrettyPrint.GenericPretty (Generic, Out (..))
@@ -67,7 +68,7 @@ type GPkgMap p = Map Text p -- by fullpkgpath
 
 type Pkg = GPkg Text
 
-type PkgMap = GPkgMap (GPkg Text)
+type PkgMap = GPkgMap Pkg
 
 data DependsType = BuildDepends | LibDepends | RunDepends | RegressDepends
   deriving (Show, Eq, Generic)
@@ -219,10 +220,10 @@ pkgClosure ps = zapNonHsDeps <$> ps
 -- without the version number). For multipackages, only take the
 -- ",-lib" subpackage (probably wrong, but currently, all hs-ports
 -- with multipackage actually have a -main and a -lib subpackage).
-bydistname :: [Pkg] -> PkgMap
+bydistname :: [Pkg] -> Map PackageName Pkg
 bydistname pkgs =
   Map.fromList
-    [ (zapVers (fromMaybe undefined dn), p)
+    [ (mkPackageName $ zapVers $ fromMaybe undefined dn, p)
       | p <- pkgs,
         let dn = distname p,
         isJust dn,
@@ -230,7 +231,7 @@ bydistname pkgs =
           || (",-lib$" `Text.isSuffixOf` fullpkgpath p)
     ]
   where
-    zapVers = fst . splitByVersion
+    zapVers = Text.unpack . fst . splitByVersion
 
 splitByVersion :: Text -> (Text, Text)
 splitByVersion t =
