@@ -112,7 +112,7 @@ findPkg ::
   IO ()
 findPkg ipkgs hpkgs hdb p = do
   print p
-  let pkgs' = bydistname $ Map.elems hpkgs
+  let pkgs' = bydistname hpkgs
       pkgName = mkPackageName p
       printJust = printJust' putStrLn
       printJust' printer x f = maybe (pure ()) (printer . f) x
@@ -145,7 +145,7 @@ printHackageDeps = do
   hpkgs <- bracket open close hspkgs
   hdb <- readHackage
   systemPkgs <- Map.keysSet <$> bundledPackages
-  let pkgs = bydistname $ Map.elems hpkgs
+  let pkgs = bydistname hpkgs
       -- The ??? below happen when pointing to non-existent ports.
       -- They aren't necessarily errors because the port may not
       -- be built with flags that require such a dependency.

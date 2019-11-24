@@ -36,6 +36,7 @@ where
 import Cabal.Cabal
 import Data.Char (isDigit)
 import Data.Fix (Fix (..), ana)
+import Data.Foldable (toList)
 import Data.Function (on)
 import Data.List
 import Data.Map (Map)
@@ -216,15 +217,15 @@ pkgClosure ps = zapNonHsDeps <$> ps
     isHsDep :: Dependency Text -> Bool
     isHsDep d = dependspath d `Map.member` ps
 
--- Build a map from a list of Pkgs where the keys are distnames (but
+-- Build a map from a bunch of Pkgs where the keys are distnames (but
 -- without the version number). For multipackages, only take the
 -- ",-lib" subpackage (probably wrong, but currently, all hs-ports
 -- with multipackage actually have a -main and a -lib subpackage).
-bydistname :: [Pkg] -> Map PackageName Pkg
+bydistname :: Foldable f => f (GPkg a) -> Map PackageName (GPkg a)
 bydistname pkgs =
   Map.fromList
     [ (mkPackageName $ zapVers $ fromMaybe undefined dn, p)
-      | p <- pkgs,
+      | p <- toList pkgs,
         let dn = distname p,
         isJust dn,
         not (multi p)
