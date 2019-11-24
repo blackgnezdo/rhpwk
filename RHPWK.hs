@@ -20,9 +20,9 @@ module RHPWK
 where
 
 import Cabal.Cabal
-import Control.Arrow (first)
 import Control.Exception (bracket)
 import Control.Monad (forM_)
+import Data.Bifunctor (first)
 import Data.List (isSuffixOf, nub, sort)
 import qualified Data.Map as Map
 import Data.Maybe
@@ -134,6 +134,22 @@ latestFromPackageHackage m = fromMaybe "not found" latest
         . DB.cabalFile
         . fst <$> Map.maxView m
 
+lookupDescription ::
+  GPkg a ->
+  DB.PackageData ->
+  Either String PD.PackageDescription
+lookupDescription hpkg pkgData = do
+  let val <?> msg = maybe (fail msg) pure val
+  hv <-
+    hackageVersion hpkg
+      <?> ("Invalid pkgname " <> Text.unpack (pkgname hpkg))
+  vd <-
+    Map.lookup (mkVersion' hv) pkgData
+      <?> ("No cabal version data " <> show hv)
+  first
+    (\ds -> "Dependency not resolved" <> show ds)
+    (refineDescription $ DB.cabalFile vd)
+
 -- | Appends updated dependency information based on hackage
 -- declarations into the Makefiles. The ports become unbuildable but
 -- somewhat convenient to update manually.
@@ -154,24 +170,16 @@ printHackageDeps = do
         let p' = mkPackageName p
          in Text.unpack $ maybe ("???" <> Text.pack p) fullpkgpath $
               Map.lookup p' pkgs
-      crossCheck = Map.intersectionWith (,) pkgs hdb
-  forM_ (Map.assocs crossCheck) $ \(pname, (hpkg, pkgData)) -> do
-    let hv =
-          mkVersion'
-            $ fromMaybe (error $ "Can't determine hackage version of " <> spname)
-            $ hackageVersion hpkg
-        spname = unPackageName pname
-    putStrLn $
-      Text.unpack (fullpkgpath hpkg)
-        <> " "
-        <> spname
-        <> "-"
-        <> prettyShow hv
-    case Map.lookup hv pkgData of
-      Nothing -> putStrLn $ "No version data " <> prettyShow hv
-      Just verData -> do
-        let pkgPd = DB.cabalFile verData
-            pkg = either (error . show) id $ refineDescription pkgPd
+      crossCheck = Map.intersectionWith (\p d -> (p, lookupDescription p d)) pkgs hdb
+  forM_ (Map.assocs crossCheck) $ \(pname, (hpkg, mbPkg)) -> do
+    case mbPkg of
+      Left str -> putStrLn str
+      Right pkg -> do
+        let spname = unPackageName pname
+        putStrLn $
+          Text.unpack (fullpkgpath hpkg)
+            <> " "
+            <> spname
         let frags =
               filter (not . null . snd) $ -- Bug in dumpCabalDeps
                 dumpDepsFromPD systemPkgs pkg
