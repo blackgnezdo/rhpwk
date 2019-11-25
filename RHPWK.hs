@@ -23,7 +23,8 @@ import Cabal.Cabal
 import Control.Exception (bracket)
 import Control.Monad (forM_)
 import Data.Bifunctor (first)
-import Data.List (isSuffixOf, nub, sort)
+import Data.Fix (Fix (unFix))
+import Data.List (isSuffixOf, sort)
 import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Text as Text
@@ -150,6 +151,25 @@ lookupDescription hpkg pkgData = do
     (\ds -> "Dependency not resolved" <> show ds)
     (refineDescription $ DB.cabalFile vd)
 
+updateMakefile ::
+  GPkg a ->
+  (String -> Maybe String) ->
+  [(String, [(String, [String])])] ->
+  IO ()
+updateMakefile hpkg packetize frags = do
+  let name = "/usr/ports" </> Text.unpack (pkgpath hpkg) </> "Makefile"
+      depListing =
+        unlines $
+          mconcat
+            [ what <> "\t\t= \\"
+                : [ "\t\t\t" <> hp <> concat rs <> " \\"
+                    | (Just hp, rs) <- sort (first packetize <$> ps)
+                  ]
+              | (what, ps) <- frags
+            ]
+  appendFile name depListing
+  putStrLn $ "Appended to " <> name
+
 -- | Appends updated dependency information based on hackage
 -- declarations into the Makefiles. The ports become unbuildable but
 -- somewhat convenient to update manually.
@@ -161,40 +181,19 @@ printHackageDeps = do
   hpkgs <- bracket open close hspkgs
   hdb <- readHackage
   systemPkgs <- Map.keysSet <$> bundledPackages
-  let pkgs = bydistname hpkgs
-      -- The ??? below happen when pointing to non-existent ports.
-      -- They aren't necessarily errors because the port may not
-      -- be built with flags that require such a dependency.
-      packetizeName :: String -> String
-      packetizeName p =
-        let p' = mkPackageName p
-         in Text.unpack $ maybe ("???" <> Text.pack p) fullpkgpath $
-              Map.lookup p' pkgs
+  let pkgs = bydistname $ unFix <$> resolvePkgMap hpkgs
+      packetizeName p = Text.unpack . fullpkgpath <$> Map.lookup p' pkgs
+        where
+          p' = mkPackageName p
       crossCheck = Map.intersectionWith (\p d -> (p, lookupDescription p d)) pkgs hdb
   forM_ (Map.assocs crossCheck) $ \(pname, (hpkg, mbPkg)) -> do
+    putStrLn $
+      Text.unpack (fullpkgpath hpkg)
+        <> " "
+        <> unPackageName pname
     case mbPkg of
-      Left str -> putStrLn str
+      Left err -> putStrLn err
       Right pkg -> do
-        let spname = unPackageName pname
-        putStrLn $
-          Text.unpack (fullpkgpath hpkg)
-            <> " "
-            <> spname
-        let frags =
-              filter (not . null . snd) $ -- Bug in dumpCabalDeps
-                dumpDepsFromPD systemPkgs pkg
-            depListing =
-              unlines $
-                mconcat
-                  [ what <> "\t\t= \\"
-                      : [ "\t\t\t" <> hp <> concat rs <> " \\"
-                          | (hp, rs) <- sort (first packetizeName <$> nub ps)
-                        ]
-                    | (what, ps) <- frags
-                  ]
-        if not $ null depListing
-          then do
-            let name = "/usr/ports" </> Text.unpack (pkgpath hpkg) </> "Makefile"
-            appendFile name depListing
-            putStrLn $ "Appended to " <> name
-          else putStrLn "Nothing to do"
+        case dumpDepsFromPD systemPkgs pkg of
+          [] -> putStrLn "Nothing to do"
+          frags -> updateMakefile hpkg packetizeName frags

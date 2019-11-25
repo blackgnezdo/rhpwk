@@ -22,6 +22,7 @@ module Cabal.Cabal
 where
 
 import Control.Monad (forM_)
+import Data.List (nub)
 import Data.Maybe (fromJust, isJust)
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -116,21 +117,22 @@ dumpDepsFromPD systemPkgs p =
       allBuilds = allBuildInfo p :: [BuildInfo]
       buildDeps = concatMap (getAllToolDependencies p) allBuilds
       pared ds = [d | d <- ds, not $ depPkgName d `Set.member` systemPkgs]
-   in concat
-        [ [ ("BUILD_DEPENDS", printExeDep <$> buildDeps)
-            | not $ null buildDeps
-          ],
-          [ ( if hasLib then "RUN_DEPENDS-main" else "RUN_DEPENDS",
-              printDep <$> pared execDeps
-            )
-            | hasExecs
-          ],
-          [ ( if hasExecs then "RUN_DEPENDS-lib" else "RUN_DEPENDS",
-              printDep <$> pared libDeps
-            )
-            | hasLib
+   in fmap (fmap nub) $ filter (not . null . snd) $
+        concat
+          [ [ ("BUILD_DEPENDS", printExeDep <$> buildDeps)
+              | not $ null buildDeps
+            ],
+            [ ( if hasLib then "RUN_DEPENDS-main" else "RUN_DEPENDS",
+                printDep <$> pared execDeps
+              )
+              | hasExecs
+            ],
+            [ ( if hasExecs then "RUN_DEPENDS-lib" else "RUN_DEPENDS",
+                printDep <$> pared libDeps
+              )
+              | hasLib
+            ]
           ]
-        ]
 
 printExeDep :: ExeDependency -> (String, [String])
 printExeDep (ExeDependency pkg _ vs) = (unPackageName pkg, printVR vs)

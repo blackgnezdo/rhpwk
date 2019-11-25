@@ -30,6 +30,7 @@ module Database.Sqlports
     open,
     distVersion,
     hackageVersion,
+    resolvePkgMap,
   )
 where
 
