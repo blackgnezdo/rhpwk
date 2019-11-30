@@ -34,7 +34,6 @@ updateText frags = mconcat . fmap edit . fragments
 updateFile :: FilePath -> [DepFragment] -> IO ()
 updateFile name frags = do
   updateText frags <$> Text.readFile name >>= Text.writeFile name
-  putStrLn $ "Appended to " <> name
 
 -- | Splits the given text into fragments spanning lines with
 -- continuations indicated by a trailing backslash.

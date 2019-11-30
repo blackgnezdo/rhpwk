@@ -64,6 +64,8 @@ updateDeps = do
       Right pkg -> do
         case dumpDepsFromPD systemPkgs pkg of
           [] -> putStrLn "Nothing to do"
-          frags ->
+          frags -> do
             let name = "/usr/ports" </> Text.unpack (pkgpath hpkg) </> "Makefile"
-             in updateFile name (pruneFrags packetizeName frags)
+            updateFile name (pruneFrags packetizeName frags)
+            putStrLn $ "Updated " <> name
+
