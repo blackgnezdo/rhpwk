@@ -21,13 +21,9 @@ where
 
 import Cabal.Cabal
 import Control.Exception (bracket)
-import Control.Monad (forM_)
-import Data.Bifunctor (first)
-import Data.Fix (Fix (unFix))
 import Data.List (isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe
-import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Database.GhcPkg
 import Database.Sqlports
@@ -36,11 +32,8 @@ import Distribution.InstalledPackageInfo
 import Distribution.Package
 import qualified Distribution.PackageDescription as PD
 import Distribution.Pretty (prettyShow)
-import Distribution.Types.Version (mkVersion')
-import Make.File (pruneFrags, updateFile)
 import System.Console.GetOpt
 import System.Environment
-import System.FilePath
 import Prelude
 
 data Flag = All | Dump | Pkgs deriving (Eq, Show)
@@ -135,49 +128,3 @@ latestFromPackageHackage m = fromMaybe "not found" latest
       prettyShow . pkgVersion . PD.package . PD.packageDescription
         . DB.cabalFile
         . fst <$> Map.maxView m
-
-lookupDescription ::
-  GPkg a ->
-  DB.PackageData ->
-  Either String PD.PackageDescription
-lookupDescription hpkg pkgData = do
-  let val <?> msg = maybe (fail msg) pure val
-  hv <-
-    hackageVersion hpkg
-      <?> ("Invalid pkgname " <> Text.unpack (pkgname hpkg))
-  vd <-
-    Map.lookup (mkVersion' hv) pkgData
-      <?> ("No cabal version data " <> show hv)
-  first
-    (\ds -> "Dependency not resolved" <> show ds)
-    (refineDescription $ DB.cabalFile vd)
-
--- | Appends updated dependency information based on hackage
--- declarations into the Makefiles. The ports become unbuildable but
--- somewhat convenient to update manually.
---
--- TODO: compare the pre-existing declarations with the computed
--- ones to save resolution work on human's part.
-printHackageDeps :: IO ()
-printHackageDeps = do
-  hpkgs <- bracket open close hspkgs
-  hdb <- readHackage
-  systemPkgs <- Map.keysSet <$> bundledPackages
-  let pkgs = bydistname $ unFix <$> resolvePkgMap hpkgs
-      packetizeName p = Text.unpack . fullpkgpath <$> Map.lookup p' pkgs
-        where
-          p' = mkPackageName p
-      crossCheck = Map.intersectionWith (\p d -> (p, lookupDescription p d)) pkgs hdb
-  forM_ (Map.assocs crossCheck) $ \(pname, (hpkg, mbPkg)) -> do
-    putStrLn $
-      Text.unpack (fullpkgpath hpkg)
-        <> " "
-        <> unPackageName pname
-    case mbPkg of
-      Left err -> putStrLn err
-      Right pkg -> do
-        case dumpDepsFromPD systemPkgs pkg of
-          [] -> putStrLn "Nothing to do"
-          frags ->
-            let name = "/usr/ports" </> Text.unpack (pkgpath hpkg) </> "Makefile"
-             in updateFile name (pruneFrags packetizeName frags)
