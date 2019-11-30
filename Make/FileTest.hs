@@ -7,6 +7,7 @@ import Data.Text.Arbitrary ()
 import Make.File
 import Test.QuickCheck
 import Test.Tasty
+import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck as QC
 
 roundTripText :: Text -> Property
@@ -31,4 +32,10 @@ qcProps =
       QC.testProperty "Text" roundTripText
     ]
 
-main = defaultMain properties
+unitTests = testGroup "Unit tests"
+  [ testCase "Trivial subtitution" $
+      updateText [("FOO", [("bar", ["baz", "foo"])])] "X\nFOO += x\nY"
+      @?= "X\nFOO +=\t\tbarbaz,foo\nY\n"
+  ]
+
+main = defaultMain (testGroup "Tests" [properties, unitTests])

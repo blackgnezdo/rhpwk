@@ -5,6 +5,7 @@ module Make.File
   ( fragments,
     pruneFrags,
     updateFile,
+    updateText,
     runsWhile,
   )
 where
@@ -19,7 +20,7 @@ import Text.PrettyPrint hiding ((<>))
 type DepFragment = (String, [(String, [String])])
 
 updateText :: [DepFragment] -> Text -> Text
-updateText frags = Text.unlines . fmap edit . fragments
+updateText frags = mconcat . fmap edit . fragments
   where
       replacements =
         [ (Text.pack $ fst frag, Text.pack . render $ renderFrag frag)
@@ -27,7 +28,7 @@ updateText frags = Text.unlines . fmap edit . fragments
         ]
       edit frag = foldr replaceIfMatches frag replacements
       replaceIfMatches (name, replacement) frag
-        | name `Text.isPrefixOf` frag = replacement
+        | name `Text.isPrefixOf` frag = replacement <> "\n"
         | otherwise = frag
 
 updateFile :: FilePath -> [DepFragment] -> IO ()
