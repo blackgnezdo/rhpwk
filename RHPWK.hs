@@ -24,7 +24,7 @@ import Control.Exception (bracket)
 import Control.Monad (forM_)
 import Data.Bifunctor (first)
 import Data.Fix (Fix (unFix))
-import Data.List (isSuffixOf, sort)
+import Data.List (isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Text as Text
@@ -37,10 +37,11 @@ import Distribution.Package
 import qualified Distribution.PackageDescription as PD
 import Distribution.Pretty (prettyShow)
 import Distribution.Types.Version (mkVersion')
+import Make.File (pruneFrags, updateFile)
 import System.Console.GetOpt
 import System.Environment
 import System.FilePath
-import Prelude hiding (lookup)
+import Prelude
 
 data Flag = All | Dump | Pkgs deriving (Eq, Show)
 
@@ -151,25 +152,6 @@ lookupDescription hpkg pkgData = do
     (\ds -> "Dependency not resolved" <> show ds)
     (refineDescription $ DB.cabalFile vd)
 
-updateMakefile ::
-  GPkg a ->
-  (String -> Maybe String) ->
-  [(String, [(String, [String])])] ->
-  IO ()
-updateMakefile hpkg packetize frags = do
-  let name = "/usr/ports" </> Text.unpack (pkgpath hpkg) </> "Makefile"
-      depListing =
-        unlines $
-          mconcat
-            [ what <> "\t\t= \\"
-                : [ "\t\t\t" <> hp <> concat rs <> " \\"
-                    | (Just hp, rs) <- sort (first packetize <$> ps)
-                  ]
-              | (what, ps) <- frags
-            ]
-  appendFile name depListing
-  putStrLn $ "Appended to " <> name
-
 -- | Appends updated dependency information based on hackage
 -- declarations into the Makefiles. The ports become unbuildable but
 -- somewhat convenient to update manually.
@@ -196,4 +178,6 @@ printHackageDeps = do
       Right pkg -> do
         case dumpDepsFromPD systemPkgs pkg of
           [] -> putStrLn "Nothing to do"
-          frags -> updateMakefile hpkg packetizeName frags
+          frags ->
+            let name = "/usr/ports" </> Text.unpack (pkgpath hpkg) </> "Makefile"
+             in updateFile name (pruneFrags packetizeName frags)

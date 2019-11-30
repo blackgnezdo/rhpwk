@@ -10,10 +10,7 @@ category:            Development
 build-type:          Simple
 extra-source-files:  CHANGELOG.md
 
-executable rhpwk
-  main-is:       RHPWK.hs
-  ghc-options:   -Wno-tabs -main-is RHPWK -Wunused-imports
-  other-modules: Cabal.Cabal, Database.GhcPkg, Database.Sqlports
+common deps
   build-depends: Cabal >=2.4 && <2.5,
                  GenericPretty>=1.2.3,
                  HDBC >=2.4 && <2.5,
@@ -27,4 +24,37 @@ executable rhpwk
                  pretty,
                  process >= 1.6.5,
                  text
+
+library rhpwk-internal
+  import: deps
+  ghc-options: -Wunused-imports
+  exposed-modules: Cabal.Cabal,
+                 Database.GhcPkg,
+                 Database.Sqlports,
+                 Make.File
+  build-depends: 
   default-language:    Haskell2010
+
+executable rhpwk
+  import: deps
+  ghc-options: -main-is RHPWK -Wunused-imports
+  main-is:       RHPWK.hs
+  other-modules: Cabal.Cabal,
+                 Database.GhcPkg,
+                 Database.Sqlports,
+                 Make.File
+  default-language:    Haskell2010
+
+test-suite make-test
+    type:       exitcode-stdio-1.0
+    main-is:    Make/FileTest.hs
+    build-depends: rhpwk-internal
+                 , QuickCheck
+                 , base
+                 , pretty
+                 , quickcheck-text
+                 , tasty
+                 , tasty-quickcheck
+                 , text
+    other-modules: Make.File
+    default-language:    Haskell2010
