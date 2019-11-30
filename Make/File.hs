@@ -11,7 +11,7 @@ module Make.File
 where
 
 import Data.Bifunctor (first)
-import Data.List (sort)
+import Data.List (elemIndex, sort)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -22,14 +22,14 @@ type DepFragment = (String, [(String, [String])])
 updateText :: [DepFragment] -> Text -> Text
 updateText frags = mconcat . fmap edit . fragments
   where
-      replacements =
-        [ (Text.pack $ fst frag, Text.pack . render $ renderFrag frag)
-          | frag <- frags
-        ]
-      edit frag = foldr replaceIfMatches frag replacements
-      replaceIfMatches (name, replacement) frag
-        | name `Text.isPrefixOf` frag = replacement <> "\n"
-        | otherwise = frag
+    replacements =
+      [ (Text.pack $ fst frag, Text.pack . render $ renderFrag frag)
+        | frag <- frags
+      ]
+    edit frag = foldr replaceIfMatches frag replacements
+    replaceIfMatches (name, replacement) frag
+      | Just 0 <- elemIndex name (Text.words frag) = replacement <> "\n"
+      | otherwise = frag
 
 updateFile :: FilePath -> [DepFragment] -> IO ()
 updateFile name frags = do
@@ -39,7 +39,8 @@ updateFile name frags = do
 -- continuations indicated by a trailing backslash.
 fragments :: Text -> [Text]
 fragments ts = Text.unlines <$> runsWhile hasContinuation (Text.lines ts)
-  where hasContinuation = Text.isSuffixOf "\n"
+  where
+    hasContinuation = Text.isSuffixOf "\n"
 
 -- | Produces runs of elements that match the given predicate until it
 -- fails to hold (e.g. continuation lines indicated by trailing \\).

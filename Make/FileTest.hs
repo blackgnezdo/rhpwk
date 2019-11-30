@@ -32,10 +32,19 @@ qcProps =
       QC.testProperty "Text" roundTripText
     ]
 
-unitTests = testGroup "Unit tests"
-  [ testCase "Trivial subtitution" $
-      updateText [("FOO", [("bar", ["baz", "foo"])])] "X\nFOO += x\nY"
-      @?= "X\nFOO +=\t\tbarbaz,foo\nY\n"
-  ]
+unitTests =
+  testGroup
+    "Unit tests"
+    [ testCase "Trivial subtitution" $
+        updateText [("FOO", [("bar", ["baz", "foo"])])] "X\nFOO += x\nY"
+          @?= "X\nFOO +=\t\tbarbaz,foo\nY\n",
+      testCase "Exact subtitution" $
+        updateText
+          [ ("FOO", [("bar", ["baz", "foo"])]),
+            ("FO", [("1", ["2", "3"])])
+          ]
+          "X\nFOO += x\nY"
+          @?= "X\nFOO +=\t\tbarbaz,foo\nY\n"
+    ]
 
 main = defaultMain (testGroup "Tests" [properties, unitTests])
