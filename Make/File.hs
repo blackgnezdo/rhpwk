@@ -40,7 +40,7 @@ updateFile name frags = do
 fragments :: Text -> [Text]
 fragments ts = Text.unlines <$> runsWhile hasContinuation (Text.lines ts)
   where
-    hasContinuation = Text.isSuffixOf "\n"
+    hasContinuation = Text.isSuffixOf "\\"
 
 -- | Produces runs of elements that match the given predicate until it
 -- fails to hold (e.g. continuation lines indicated by trailing \\).

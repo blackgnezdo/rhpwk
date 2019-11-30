@@ -11,9 +11,13 @@ import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck as QC
 
 roundTripText :: Text -> Property
-roundTripText t =
-  let augmentedInput = if "\n" `isSuffixOf` t then t else t <> "\n"
-   in augmentedInput === mconcat (fragments augmentedInput)
+roundTripText t = withEol === mconcat (fragments withEol)
+  where
+    withEol = if "\n" `isSuffixOf` t then t else t <> "\n"
+
+continuationsCollected :: Text -> Bool
+continuationsCollected t =
+  not $ any ("\\\n" `isSuffixOf`) $ fragments $ t <> "\nfoo\n"
 
 roundTripRuns :: [Bool] -> Property
 roundTripRuns bs =
@@ -29,7 +33,8 @@ qcProps =
   testGroup
     "(checked by QuickCheck)"
     [ QC.testProperty "Bools" roundTripRuns,
-      QC.testProperty "Text" roundTripText
+      QC.testProperty "Text" roundTripText,
+      QC.testProperty "Continuation lines collected" continuationsCollected
     ]
 
 unitTests =
