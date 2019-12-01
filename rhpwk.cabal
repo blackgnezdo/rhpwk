@@ -31,7 +31,9 @@ library rhpwk-internal
   exposed-modules: Cabal.Cabal,
                  Database.GhcPkg,
                  Database.Sqlports,
-                 Make.File
+                 Make.File,
+                 RHPWK,
+                 UpdateDeps
   build-depends: 
   default-language:    Haskell2010
 

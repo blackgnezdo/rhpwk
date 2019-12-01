@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | Replaces dependency information based on hackage declarations in
 -- haskell ports Makefiles.
 module UpdateDeps
@@ -9,6 +10,7 @@ import Cabal.Cabal (dumpDepsFromPD, refineDescription)
 import Control.Exception (bracket)
 import Control.Monad (forM_)
 import Data.Bifunctor (first)
+import Data.Fix (unFix)
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 import Database.GhcPkg (bundledPackages)
@@ -17,7 +19,8 @@ import Database.Sqlports
     bydistname,
     close,
     hackageVersion,
-    hspkgs,
+    allpkgs,
+    resolvePkgMap,
     open,
   )
 import qualified Distribution.Hackage.DB as DB
@@ -47,19 +50,20 @@ lookupDescription hpkg pkgData = do
 
 updateDeps :: IO ()
 updateDeps = do
-  pkgs <- bydistname <$> bracket open close hspkgs
+  pkgs <- bydistname . fmap unFix . resolvePkgMap <$> bracket open close allpkgs
   hdb <- DB.hackageTarball >>= DB.readTarball Nothing
   systemPkgs <- Map.keysSet <$> bundledPackages
   let packetizeName p = Text.unpack . fullpkgpath <$> Map.lookup p' pkgs
         where
           p' = mkPackageName p
-      crossCheck = Map.intersectionWith (\p d -> (p, lookupDescription p d)) pkgs hdb
-  forM_ (Map.assocs crossCheck) $ \(pname, (hpkg, mbPkg)) -> do
+      crossCheck =
+        Map.intersectionWith (\p d -> (p, lookupDescription p d)) pkgs hdb
+  forM_ (Map.assocs crossCheck) $ \(pname, (hpkg, cabalPkg)) -> do
     putStrLn $
       Text.unpack (fullpkgpath hpkg)
         <> " "
         <> unPackageName pname
-    case mbPkg of
+    case cabalPkg of
       Left err -> putStrLn err
       Right pkg -> do
         case dumpDepsFromPD systemPkgs pkg of

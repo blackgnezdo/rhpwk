@@ -78,6 +78,10 @@ parsePkgSpec "" = Just $ PkgSpec anyVersion
 parsePkgSpec pkgSpecStr = PkgSpec <$> (cleaner pkgSpecStr >>= simpleParsec)
   where
     cleaner :: String -> Maybe String
+    -- Special case of exact match starts with "=", the other OpenBSD
+    -- package spec operators start with "<" or ">".
+    cleaner ('S' : 'T' : 'E' : 'M' : '-' : version@('=' : _)) =
+      Just $ '=' : version
     cleaner ('S' : 'T' : 'E' : 'M' : '-' : version) =
       Just $ concatMap replaceComma version
     cleaner _ = Nothing

@@ -123,10 +123,15 @@ hspkgs c =
   -- WHERE d2.dependspath = 'lang/ghc'
   pkgClosure
     <$> getpkgs
-      "JOIN depends d2 USING (fullpkgpath) \
-      \JOIN paths pa4 ON d2.dependspath = pa4.FullPkgPath \
-      \WHERE pa4.fullpkgpath = 'lang/ghc'"
+      ( "JOIN depends d2 USING (fullpkgpath) \
+        \JOIN paths pa4 ON d2.dependspath = pa4.FullPkgPath \
+        \WHERE pa4.fullpkgpath = '"
+          <> ghcFullPkgName
+          <> "'"
+      )
       c
+
+ghcFullPkgName = "lang/ghc"
 
 getpkgs :: String -> Connection -> IO PkgMap
 getpkgs constr c = do
@@ -222,37 +227,38 @@ pkgClosure ps = zapNonHsDeps <$> ps
 -- without the version number). For multipackages, only take the
 -- ",-lib" subpackage (probably wrong, but currently, all hs-ports
 -- with multipackage actually have a -main and a -lib subpackage).
+--
+-- Silently drops distnames that don't look like "stem-ver",
+-- e.g. liblastfm with DISTNAME = 1.0.9.
 bydistname :: Foldable f => f (GPkg a) -> Map PackageName (GPkg a)
 bydistname pkgs =
   Map.fromList
-    [ (mkPackageName $ zapVers $ fromMaybe undefined dn, p)
+    [ (mkPackageName dn, p)
       | p <- toList pkgs,
-        let dn = distname p,
-        isJust dn,
+        Just dn <- [distname p >>= zapVers],
         not (multi p)
-          || (",-lib$" `Text.isSuffixOf` fullpkgpath p)
+          || (",-lib" `Text.isSuffixOf` fullpkgpath p)
     ]
   where
-    zapVers = Text.unpack . fst . splitByVersion
+    zapVers p = Text.unpack . fst <$> splitByVersion p
 
-splitByVersion :: Text -> (Text, Text)
-splitByVersion t =
-  ( Text.init $ Text.dropWhileEnd versionChar t,
-    Text.takeWhileEnd versionChar t
-  )
+splitByVersion :: Text -> Maybe (Text, Text)
+splitByVersion t = fmap (const ver) <$> stem
   where
     versionChar '.' = True
     versionChar c = isDigit c
+    stem = Text.unsnoc $ Text.dropWhileEnd versionChar t
+    ver = Text.takeWhileEnd versionChar t
 
 -- Extract the version number from a Pkgs distname.
-distVersion :: GPkg a -> Text
-distVersion = snd . splitByVersion . pkgname
+distVersion :: GPkg a -> Maybe Text
+distVersion = fmap snd . splitByVersion . pkgname
 
 -- | Returns the hackage version for the given package if possible.
 hackageVersion :: GPkg a -> Maybe Version
-hackageVersion p =
+hackageVersion p = do
+  parses <- readP_to_S parseVersion . Text.unpack <$> distVersion p
   let pickFullParse = filter ((== "") . snd)
-      parses = readP_to_S parseVersion $ Text.unpack $ distVersion p
    in case pickFullParse parses of
         [(v, "")] -> Just v
         _ -> Nothing
@@ -273,3 +279,11 @@ resolvePkgMap m = resolve <$> m
     forceLookup n = fromMaybe e $ Map.lookup n m
       where
         e = error $ "Can't resolve " <> Text.unpack n
+
+nonHsDep :: GPkg (Fix GPkg) -> [Dependency ResolvedPkg]
+nonHsDep pkg = [dep | dep <- deps pkg, interesting (dependency dep)]
+  where
+    interesting dep = not (isGhc dep || hasGhcDependency dep)
+    dependency = unFix . dependspath
+    isGhc g = fullpkgpath g == Text.pack ghcFullPkgName
+    hasGhcDependency dep = any isGhc (dependency <$> deps dep)

@@ -24,6 +24,7 @@ import Control.Exception (bracket)
 import Data.List (isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe
+import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Database.GhcPkg
 import Database.Sqlports
@@ -112,7 +113,7 @@ findPkg ipkgs hpkgs hdb p = do
       printJust = printJust' putStrLn
       printJust' printer x f = maybe (pure ()) (printer . f) x
   printJust' Text.putStrLn (Map.lookup pkgName pkgs') $ \pkg ->
-    "sqlports:\t" <> fullpkgpath pkg <> " (" <> distVersion pkg <> ")"
+    "sqlports:\t" <> fullpkgpath pkg <> " (" <> Text.pack (show (distVersion pkg)) <> ")"
   printJust (Map.lookup pkgName ipkgs) $ \pkg ->
     "ghc-pkg:\t" <> ipkgpath pkg
       <> " ("
