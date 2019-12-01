@@ -21,16 +21,19 @@ module Database.Sqlports
   ( Connection,
     Dependency (..),
     GPkg (..),
+    ResolvedPkg,
     Pkg,
     PkgMap,
     close,
     hspkgs,
     allpkgs,
     bydistname,
+    fixedDep,
     open,
     distVersion,
     hackageVersion,
     resolvePkgMap,
+    nonHsDeps,
   )
 where
 
@@ -280,10 +283,15 @@ resolvePkgMap m = resolve <$> m
       where
         e = error $ "Can't resolve " <> Text.unpack n
 
-nonHsDep :: GPkg (Fix GPkg) -> [Dependency ResolvedPkg]
-nonHsDep pkg = [dep | dep <- deps pkg, interesting (dependency dep)]
+-- | Looks up the dependency inside the given recursive fixture.
+fixedDep :: Dependency (Fix f) -> f (Fix f)
+fixedDep = unFix . dependspath
+
+-- | Finds all the dependencies for the given package that will not be
+-- available in Hackage.
+nonHsDeps :: GPkg (Fix GPkg) -> [Dependency ResolvedPkg]
+nonHsDeps pkg = [dep | dep <- deps pkg, interesting (fixedDep dep)]
   where
     interesting dep = not (isGhc dep || hasGhcDependency dep)
-    dependency = unFix . dependspath
     isGhc g = fullpkgpath g == Text.pack ghcFullPkgName
-    hasGhcDependency dep = any isGhc (dependency <$> deps dep)
+    hasGhcDependency dep = any isGhc (fixedDep <$> deps dep)

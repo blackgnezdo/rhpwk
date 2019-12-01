@@ -2,7 +2,8 @@
 
 -- | Makefile parse/render.
 module Make.File
-  ( fragments,
+  ( DepFragment,
+    fragments,
     pruneFrags,
     updateFile,
     updateText,

@@ -10,24 +10,29 @@ import Cabal.Cabal (dumpDepsFromPD, refineDescription)
 import Control.Exception (bracket)
 import Control.Monad (forM_)
 import Data.Bifunctor (first)
+import Data.List (nub)
 import Data.Fix (unFix)
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 import Database.GhcPkg (bundledPackages)
 import Database.Sqlports
   ( GPkg (..),
+    Dependency(..),
+    ResolvedPkg,
+    allpkgs,
     bydistname,
+    fixedDep,
     close,
     hackageVersion,
-    allpkgs,
-    resolvePkgMap,
+    nonHsDeps,
     open,
+    resolvePkgMap,
   )
 import qualified Distribution.Hackage.DB as DB
 import Distribution.Package (mkPackageName, unPackageName)
 import qualified Distribution.PackageDescription as PD
 import Distribution.Types.Version (mkVersion')
-import Make.File (pruneFrags, updateFile)
+import Make.File (DepFragment, pruneFrags, updateFile)
 import System.FilePath ((</>))
 
 main = updateDeps
@@ -70,6 +75,12 @@ updateDeps = do
           [] -> putStrLn "Nothing to do"
           frags -> do
             let name = "/usr/ports" </> Text.unpack (pkgpath hpkg) </> "Makefile"
-            updateFile name (pruneFrags packetizeName frags)
+            updateFile name (enrich (nonHsDeps hpkg) $ pruneFrags packetizeName frags)
             putStrLn $ "Updated " <> name
 
+-- TODO: use dependency kind to put the enrichments where they belong,
+-- not everywhere.
+enrich :: [Dependency ResolvedPkg] -> [DepFragment] -> [DepFragment]
+enrich deps frags = [(what, ps <> enrichments) | (what, ps) <- frags]
+  where enrichments = nub [(Text.unpack $ fullpkgpath $ fixedDep d,
+                            [show $ pkgspec d]) | d <- deps]
